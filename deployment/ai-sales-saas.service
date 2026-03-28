@@ -1,0 +1,14 @@
+[Unit]
+Description=Gunicorn daemon for AI Sales SaaS
+After=network.target
+
+[Service]
+User=root
+Group=www-data
+WorkingDirectory=/opt/ai-sales-saas
+Environment="PATH=/opt/ai-sales-saas/venv/bin"
+EnvironmentFile=/opt/ai-sales-saas/.env
+ExecStart=/opt/ai-sales-saas/venv/bin/gunicorn -w 4 -b 127.0.0.1:8000 "src.main:app"
+
+[Install]
+WantedBy=multi-user.target

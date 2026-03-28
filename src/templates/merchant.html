@@ -1,0 +1,668 @@
+<!DOCTYPE html>
+<html lang="{{ lang }}" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ store.name }} - AI CRM</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;900&display=swap');
+        body { font-family: 'Tajawal', sans-serif; }
+        .scrollbar-hide::-webkit-scrollbar { display: none; }
+        .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+        .chat-scroll::-webkit-scrollbar { width: 6px; }
+        .chat-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+    </style>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: { primary: '#4f46e5', secondary: '#ec4899', dark: '#0f172a' }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-slate-50 text-slate-800 h-screen flex overflow-hidden">
+
+    <!-- Sidebar -->
+    <aside class="w-64 bg-dark text-slate-300 flex flex-col shrink-0 shadow-xl z-20 transition-all duration-300 relative">
+        <div class="h-16 flex items-center px-6 border-b border-slate-800 bg-slate-900 shrink-0 w-full z-10">
+            <h1 class="text-xl font-black text-white truncate flex items-center gap-2">
+                <span class="text-primary text-2xl">⚡</span> AI CRM
+            </h1>
+        </div>
+        <div class="flex-1 overflow-y-auto py-6 flex flex-col gap-2 px-4 scrollbar-hide">
+            <button onclick="switchTab('dashboard')" id="nav-dashboard" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-slate-800 hover:text-white transition font-bold bg-primary text-white">
+                <span>📊</span> {{ _('stats') }}
+            </button>
+            <button onclick="switchTab('crm')" id="nav-crm" class="w-full flex justify-between items-center px-4 py-3 rounded-xl hover:bg-slate-800 hover:text-white transition font-bold">
+                <div class="flex items-center gap-3"><span>💬</span> {{ _('crm') }}</div>
+                {% if human_requests|length > 0 %}
+                    <span class="bg-red-500 text-white text-xs px-2 py-1 rounded-full animate-pulse">{{ human_requests|length }}</span>
+                {% endif %}
+            </button>
+            <button onclick="switchTab('products')" id="nav-products" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-slate-800 hover:text-white transition font-bold">
+                <span>📦</span> {{ _('inventory') }}
+            </button>
+            <button onclick="switchTab('orders')" id="nav-orders" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-slate-800 hover:text-white transition font-bold">
+                <span>🛒</span> {{ _('orders') }}
+            </button>
+            <button onclick="switchTab('broadcast')" id="nav-broadcast" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-slate-800 hover:text-white transition font-bold">
+                <span>📢</span> {{ _('broadcast') }}
+            </button>
+            <button onclick="switchTab('settings')" id="nav-settings" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-slate-800 hover:text-white transition font-bold">
+                <span>⚙️</span> {{ _('settings') }}
+            </button>
+        </div>
+        
+        <div class="px-4 pb-6 mt-auto">
+            <a href="/logout" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-red-400 hover:bg-red-500 hover:text-white transition font-bold text-sm">
+                <span>🚪</span> {{ _('logout') }}
+            </a>
+        </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="flex-1 flex flex-col h-screen overflow-hidden relative bg-slate-50">
+        
+        <!-- Topbar -->
+        <header class="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-8 shrink-0 z-10">
+            <div class="flex items-center gap-3">
+                <h2 class="text-xl font-black text-slate-800">{{ store.name }}</h2>
+                {% if store.is_active and not is_expired %}
+                    <span class="bg-green-100 text-green-700 text-xs px-2 py-1 rounded-full font-bold shadow-sm inline-flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span> متصل</span>
+                {% else %}
+                    <span class="bg-red-100 text-red-700 text-xs px-2 py-1 rounded-full font-bold shadow-sm">انتهى الاشتراك</span>
+                {% endif %}
+            </div>
+            
+            <div class="flex items-center gap-2">
+                <a href="/set_lang/ar" class="text-xs font-bold px-3 py-1.5 rounded-lg border {% if lang == 'ar' %}bg-primary text-white border-primary{% else %}bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-200{% endif %} transition">عربي</a>
+                <a href="/set_lang/en" class="text-xs font-bold px-3 py-1.5 rounded-lg border {% if lang == 'en' %}bg-primary text-white border-primary{% else %}bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-200{% endif %} transition">EN</a>
+                <a href="/set_lang/tr" class="text-xs font-bold px-3 py-1.5 rounded-lg border {% if lang == 'tr' %}bg-primary text-white border-primary{% else %}bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-200{% endif %} transition">TR</a>
+            </div>
+        </header>
+
+        {% if token_warning %}
+        <div class="bg-gradient-to-r from-red-600 to-red-500 text-white p-3 text-center text-sm font-bold shadow-lg z-50 shrink-0 border-b border-red-700">
+            ⚠️ تحذير: استهلك المتجر أكثر من 80% من حصة الذكاء الاصطناعي الشهرية (الحد: {{ monthly_token_limit }}). يرجى ترقية الباقة لضمان استمرار الخدمة.
+        </div>
+        {% endif %}
+
+        <!-- Pages Container -->
+        <div class="flex-1 overflow-hidden relative">
+            
+            <!-- ====== TAB: DASHBOARD ====== -->
+            <section id="tab-dashboard" class="tab-pane absolute inset-0 overflow-y-auto p-8 scrollbar-hide">
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                    <!-- KPI Cards -->
+                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex flex-col gap-2">
+                        <span class="text-slate-500 text-sm font-bold">{{ _('total_chats') }}</span>
+                        <div class="text-3xl font-black text-primary">{{ total_conversations }}</div>
+                    </div>
+                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex flex-col gap-2">
+                        <span class="text-slate-500 text-sm font-bold">{{ _('total_orders_dashboard') }}</span>
+                        <div class="text-3xl font-black text-blue-500">{{ total_orders }}</div>
+                    </div>
+                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex flex-col gap-2">
+                        <span class="text-slate-500 text-sm font-bold">{{ _('conversion_rate_paid') }}</span>
+                        <div class="text-3xl font-black text-green-500">{{ conversion_rate }}%</div>
+                    </div>
+                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex flex-col gap-2 relative overflow-hidden">
+                        <span class="text-slate-500 text-sm font-bold z-10">{{ _('total_tokens_used') }}</span>
+                        <div class="text-3xl font-black text-purple-600 z-10">{{ total_tokens }}</div>
+                        <div class="absolute -right-4 -bottom-4 opacity-10 text-6xl">🪙</div>
+                    </div>
+                </div>
+
+                <!-- Metrics & Charts -->
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                    <!-- Chart.js -->
+                    <div class="lg:col-span-2 bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
+                        <div class="flex justify-between items-center mb-6">
+                            <h3 class="text-lg font-black text-slate-800">📊 {{ _('token_usage_chart') }}</h3>
+                            <span class="text-xs bg-purple-50 text-purple-600 px-3 py-1 rounded-full font-bold">{{ _('daily') }}</span>
+                        </div>
+                        <div class="relative h-72 w-full">
+                            <canvas id="tokenChart"></canvas>
+                        </div>
+                    </div>
+                    <!-- System Health -->
+                    <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 flex flex-col justify-between">
+                         <h3 class="text-lg font-black text-slate-800 mb-6">⚙️ {{ _('system_health') }}</h3>
+                         
+                         <div class="space-y-6">
+                             <div>
+                                 <div class="flex justify-between text-sm mb-2"><span class="text-slate-500 font-bold">{{ _('avg_reply_speed') }}</span><span class="font-black text-green-600">{{ avg_latency }} ms</span></div>
+                                 <div class="w-full bg-slate-100 rounded-full h-2"><div class="bg-green-500 h-2 rounded-full" style="width: {% if avg_latency < 2000 %}100%{%else%}50%{%endif%}"></div></div>
+                             </div>
+                             <div>
+                                 <div class="flex justify-between text-sm mb-2"><span class="text-slate-500 font-bold">{{ _('redis_conn_status') }}</span><span class="font-black text-primary">{{ _('connected_dot') }}</span></div>
+                             </div>
+                             <div>
+                                 <div class="flex justify-between text-sm mb-2"><span class="text-slate-500 font-bold">{{ _('ai_interactions_lbl') }}</span><span class="font-black text-purple-600">{{ ai_interactions }}</span></div>
+                             </div>
+                         </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ====== TAB: CRM (WhatsApp Style) ====== -->
+            <section id="tab-crm" class="tab-pane absolute inset-0 hidden p-6 pb-0 max-h-screen">
+                <div class="flex h-[calc(100vh-6rem)] bg-white rounded-2xl shadow-md border border-slate-200 overflow-hidden mb-6 relative">
+                    
+                    <!-- Left Pane: Chat List -->
+                    <div class="w-1/3 flex flex-col border-l border-slate-200 bg-white z-10">
+                        <!-- Header & Filters -->
+                        <div class="p-4 border-b border-slate-100 bg-slate-50 flex flex-col gap-3">
+                            <h3 class="font-black text-lg">{{ _('chats_lbl') }}</h3>
+                            <input type="text" id="chatSearch" placeholder="🔍 {{ _('search_customer_placeholder') }}" class="w-full bg-white border border-slate-200 rounded-lg p-2.5 text-sm outline-none focus:border-primary transition" oninput="filterChats()">
+                            <div class="flex gap-1 overflow-x-auto scrollbar-hide pb-1">
+                                <button onclick="setFilter('all')" class="crm-filter-btn active bg-slate-800 text-white text-xs px-3 py-1.5 rounded-lg whitespace-nowrap font-bold">{{ _('all_lbl') }}</button>
+                                <button onclick="setFilter('human')" class="crm-filter-btn bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs px-3 py-1.5 rounded-lg whitespace-nowrap font-bold">{{ _('needs_human_btn') }}</button>
+                                <button onclick="setFilter('ai')" class="crm-filter-btn bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs px-3 py-1.5 rounded-lg whitespace-nowrap font-bold">{{ _('ai_active_btn') }}</button>
+                            </div>
+                        </div>
+
+                        <!-- Chat List -->
+                        <div class="flex-1 overflow-y-auto chat-scroll" id="chatListDOM">
+                            {% for conv in conversations %}
+                            <div class="chat-item p-4 border-b border-slate-100 hover:bg-slate-50 cursor-pointer transition relative" 
+                                 data-id="{{ conv.id }}" data-userid="{{ conv.user_id }}" data-telegram="{{ conv.user.telegram_id }}" 
+                                 data-name="{{ conv.user.first_name }}" data-human="{{ 'true' if conv.requires_human else 'false' }}"
+                                 onclick="openChat('{{ store.id }}', '{{ conv.user_id }}', '{{ conv.user.telegram_id }}', '{{ conv.user.first_name }}', {{ 'true' if conv.requires_human else 'false' }})">
+                                 
+                                <div class="flex justify-between items-center mb-1">
+                                    <div class="font-bold text-slate-800 truncate pr-2 flex items-center gap-2">
+                                        {{ conv.user.first_name }}
+                                        {% if conv.requires_human %}
+                                            <span class="w-2.5 h-2.5 bg-red-500 rounded-full animate-pulse blur-[1px]"></span>
+                                        {% endif %}
+                                    </div>
+                                    <span class="text-[10px] text-slate-400 font-mono">{{ conv.created_at.strftime('%H:%M') }}</span>
+                                </div>
+                                <div class="text-xs text-slate-500 line-clamp-1">
+                                    {% if conv.requires_human %}
+                                        <span class="text-red-500 font-bold">{{ _('waiting_your_reply') }}</span>
+                                    {% else %}
+                                        <span class="text-green-600 font-bold">{{ _('ai_is_talking') }}</span>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            {% endfor %}
+                            {% if not conversations %}
+                                <div class="p-8 text-center text-slate-400 text-sm">{{ _('no_conversations_yet') }}</div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <!-- Right Pane: Active Chat Room -->
+                    <div class="w-2/3 flex flex-col bg-slate-50 relative" id="activeChatSpace">
+                        <!-- Empty State -->
+                        <div id="chatEmptyState" class="absolute inset-0 flex flex-col items-center justify-center bg-slate-50 z-20">
+                            <span class="text-6xl mb-4 opacity-50">📱</span>
+                            <h3 class="text-xl font-bold text-slate-400">{{ _('choose_chat_to_start') }}</h4>
+                            <p class="text-sm text-slate-400 mt-2">{{ _('monitor_or_takeover') }}</p>
+                        </div>
+
+                        <!-- Chat Header -->
+                        <div class="h-16 border-b border-slate-200 bg-white flex items-center justify-between px-6 z-10 shadow-sm shrink-0">
+                            <div class="flex items-center gap-3">
+                                <div class="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center text-primary font-bold text-xl">👤</div>
+                                <div>
+                                    <h3 class="font-black text-slate-800" id="activeChatName">{{ _('customer_name_ph') }}</h3>
+                                    <p class="text-xs font-bold" id="activeChatStatus">{{ _('loading_ph') }}</p>
+                                </div>
+                            </div>
+                            <div class="flex gap-2">
+                                <form id="aiToggleForm" action="" method="POST" onsubmit="bypassForm(event)" class="m-0">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <button id="aiToggleBtn" type="submit" class="text-xs font-bold px-4 py-2 rounded-lg transition shadow-sm border"></button>
+                                </form>
+                            </div>
+                        </div>
+
+                        <!-- Chat Messages Canvas -->
+                        <div class="flex-1 overflow-y-auto p-6 chat-scroll flex flex-col gap-4" id="chatCanvas">
+                            <!-- Messages dynamically injected here via AJAX -->
+                        </div>
+
+                        <!-- Input Area -->
+                        <div class="p-4 bg-white border-t border-slate-200 shrink-0">
+                            <form id="replyForm" onsubmit="submitReply(event)" class="flex gap-3">
+                                <input type="hidden" name="csrf_token" id="replyCsrf" value="{{ csrf_token() }}">
+                                <input type="hidden" id="activeStoreId">
+                                <input type="hidden" id="activeTelegramId">
+                                <input type="text" id="replyInput" placeholder="{{ _('type_msg_to_customer') }}" class="flex-1 bg-slate-100 border border-slate-200 rounded-xl px-4 py-3 text-sm outline-none focus:bg-white focus:border-primary focus:ring-2 focus:ring-primary/20 transition">
+                                <button type="submit" class="bg-primary hover:bg-indigo-700 text-white px-6 py-3 rounded-xl font-black transition shadow-md flex items-center gap-2">
+                                    {{ _('send_arrow') }}
+                                </button>
+                                <button type="button" onclick="submitReply(event, 'resolve')" class="bg-red-500 hover:bg-red-600 text-white px-4 py-3 rounded-xl font-black transition shadow-md whitespace-nowrap text-sm" title="إرسال واستئناف الذكاء الاصطناعي">
+                                    {{ _('end_intervention_btn') }}
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ====== TAB: PRODUCTS ====== -->
+            <section id="tab-products" class="tab-pane absolute inset-0 hidden overflow-y-auto p-8 bg-slate-50">
+                <div class="flex justify-between items-center mb-8">
+                    <h2 class="text-2xl font-black text-slate-800">{{ _('inventory_pricing_mgmt') }}</h2>
+                    <button class="bg-primary text-white font-bold px-6 py-2 rounded-lg shadow-sm hover:bg-indigo-700 transition" onclick="document.getElementById('addProductForm').classList.toggle('hidden')">{{ _('add_new_product_btn') }}</button>
+                </div>
+                
+                <!-- Add Product Form (Hidden by default) -->
+                <div id="addProductForm" class="hidden bg-white rounded-2xl p-6 shadow-sm border border-slate-200 mb-8">
+                    <form action="/merchant/{{ store.id }}/add_product" method="POST" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <div>
+                            <label class="block text-xs font-bold text-slate-500 mb-1">{{ _('product_name') }}</label>
+                            <input type="text" name="name" class="w-full border rounded-lg p-3 outline-none focus:border-primary text-sm" required>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-slate-500 mb-1">السعر ({{ store.currency }})</label>
+                            <input type="number" step="0.01" name="price" class="w-full border rounded-lg p-3 outline-none focus:border-primary text-sm dir-ltr text-left" required>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-slate-500 mb-1">{{ _('ai_directed_desc') }}</label>
+                            <textarea name="description" class="w-full border rounded-lg p-3 outline-none focus:border-primary text-sm" rows="3" required></textarea>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-slate-500 mb-1">{{ _('image_url_lbl') }}</label>
+                            <input type="url" name="image_url" class="w-full border rounded-lg p-3 outline-none focus:border-primary text-sm dir-ltr text-left">
+                            <label class="block text-xs font-bold text-slate-500 mb-1 mt-3">{{ _('category_lbl') }}</label>
+                            <input type="text" name="category" class="w-full border rounded-lg p-3 outline-none focus:border-primary text-sm" required>
+                        </div>
+                        <div class="col-span-1 md:col-span-2 flex justify-end">
+                            <button type="submit" class="bg-green-600 text-white font-black px-8 py-3 rounded-xl shadow-md">{{ _('save') }} {{ _('in_inventory') }}</button>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- Products Grid -->
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                    {% for p in products %}
+                    <div class="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden relative group">
+                        {% if p.image_url %}
+                            <div class="h-48 overflow-hidden"><img src="{{ p.image_url }}" class="w-full h-full object-cover group-hover:scale-105 transition duration-500"></div>
+                        {% else %}
+                            <div class="h-48 bg-slate-100 flex items-center justify-center text-slate-400 font-bold text-sm">{{ _('no_image_lbl') }}</div>
+                        {% endif %}
+                        <div class="p-5">
+                            <div class="flex justify-between items-start mb-2">
+                                <h3 class="font-black text-slate-800 line-clamp-1">{{ p.name }}</h3>
+                                <span class="bg-slate-100 text-slate-600 px-2 py-0.5 rounded text-xs font-bold">{{ p.category }}</span>
+                            </div>
+                            <p class="text-primary font-black mb-3 text-lg">{{ p.price }} {{ store.currency }}</p>
+                            
+                            <!-- Inline AJAX Sizes Editor (Phase 7 Request) -->
+                            <div class="mb-4">
+                                <p class="text-xs font-bold text-slate-500 mb-2">{{ _('sizes_click_to_edit') }}</p>
+                                <div class="flex flex-wrap gap-2 text-xs" id="sizes-{{ p.id }}">
+                                    <!-- Assume sizes is JSON dict: {"S": true, "M": false} -->
+                                    {% if p.sizes %}
+                                        <div class="text-slate-400 font-mono text-[10px] break-all leading-tight">{{ p.sizes }}</div>
+                                    {% else %}
+                                        <span class="text-slate-400">{{ _('no_sizes_lbl') }}</span>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            
+                            <div class="flex justify-between items-center border-t border-slate-100 pt-4">
+                                <form action="/merchant/{{ store.id }}/toggle_product/{{ p.id }}" method="POST" class="m-0">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    {% if p.is_active %}
+                                        <button type="submit" class="text-xs font-bold bg-green-100 text-green-700 py-1.5 px-3 rounded-lg w-full hover:bg-red-100 hover:text-red-700 transition">{{ _('active_sale_btn') }}</button>
+                                    {% else %}
+                                        <button type="submit" class="text-xs font-bold bg-red-100 text-red-700 py-1.5 px-3 rounded-lg w-full hover:bg-green-100 hover:text-green-700 transition">{{ _('paused_btn') }}</button>
+                                    {% endif %}
+                                </form>
+                                <form action="/merchant/{{ store.id }}/delete_product/{{ p.id }}" method="POST" class="m-0" onsubmit="return confirm('{{ _('confirm_delete') }}')">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <button type="submit" class="text-xs text-slate-400 hover:text-red-500 font-bold px-2">🗑️ حذف</button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </section>
+
+            <!-- ====== TAB: ORDERS ====== -->
+            <section id="tab-orders" class="tab-pane absolute inset-0 hidden overflow-y-auto p-8 bg-slate-50">
+                <h2 class="text-2xl font-black text-slate-800 mb-8">{{ _('completed_orders_shipping') }}</h2>
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                    <table class="w-full text-right text-sm">
+                        <thead class="bg-slate-100">
+                            <tr>
+                                <th class="p-4 font-bold text-slate-600">{{ _('order_num_tb') }}</th>
+                                <th class="p-4 font-bold text-slate-600">{{ _('customer_tb') }}</th>
+                                <th class="p-4 font-bold text-slate-600 text-center">{{ _('value_tb') }}</th>
+                                <th class="p-4 font-bold text-slate-600 text-center">{{ _('address_tb') }}</th>
+                                <th class="p-4 font-bold text-slate-600 text-center">{{ _('date_tb') }}</th>
+                                <th class="p-4 font-bold text-slate-600 text-center">{{ _('status') }}</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for o in orders %}
+                            <tr class="border-t border-slate-100 hover:bg-slate-50 transition">
+                                <td class="p-4 font-mono font-bold text-slate-500">#{{ o.id }}</td>
+                                <td class="p-4 font-black text-slate-800">{{ o.user.first_name }}</td>
+                                <td class="p-4 font-black text-green-600 text-center">{{ o.total_amount }} {{ store.currency }}</td>
+                                <td class="p-4 text-center">
+                                    <div class="text-xs bg-slate-100 p-2 rounded max-w-[150px] truncate mx-auto" title="{{ o.shipping_address }}">{{ o.shipping_address or '---' }}</div>
+                                </td>
+                                <td class="p-4 text-xs font-mono text-center text-slate-400">{{ o.created_at.strftime('%Y-%m-%d') }}</td>
+                                <td class="p-4 text-center">
+                                    {% if o.status == 'paid' %}
+                                        <span class="bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs font-bold">{{ _('status_confirmed') }}</span>
+                                    {% elif o.status in ['pending_payment', 'verifying_payment'] %}
+                                        <div class="flex flex-col gap-1 items-center">
+                                            <span class="bg-orange-100 text-orange-700 px-3 py-1 rounded-full text-xs font-bold animate-pulse">{{ _('payment_pending') }}</span>
+                                            <form action="/merchant/{{ store.id }}/order/{{ o.id }}/approve" method="POST" class="m-0">
+                                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                                <button type="submit" class="text-[10px] bg-green-600 text-white px-2 py-1 rounded">{{ _('financial_confirm') }}</button>
+                                            </form>
+                                        </div>
+                                    {% else %}
+                                        <span class="bg-slate-100 text-slate-600 px-3 py-1 rounded-full text-xs font-bold">{{ o.status }}</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+            
+            <!-- ====== TAB: BROADCAST ====== -->
+            <section id="tab-broadcast" class="tab-pane absolute inset-0 hidden overflow-y-auto p-8 bg-slate-50">
+                <div class="max-w-2xl bg-white rounded-2xl shadow-sm border border-slate-200 p-8">
+                    <h2 class="text-2xl font-black text-slate-800 mb-2">{{ _('create_ad_campaign') }}</h2>
+                    <p class="text-slate-500 text-sm mb-6">{{ _('broadcast_warning_start') }} {{ users|length }} {{ _('customers_end') }}</p>
+                    <form action="/merchant/{{ store.id }}/broadcast" method="POST">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <textarea name="message" rows="5" class="w-full text-right bg-slate-50 border border-slate-200 rounded-xl p-4 mb-4 focus:ring-2 focus:ring-primary focus:outline-none text-sm" placeholder="{{ _('write_promo_offer') }}" required></textarea>
+                        <button type="submit" class="w-full bg-primary hover:bg-indigo-700 text-white font-black py-4 rounded-xl transition shadow-md">{{ _('send_campaign_now') }}</button>
+                    </form>
+                </div>
+            </section>
+            
+            <!-- ====== TAB: SETTINGS ====== -->
+            <section id="tab-settings" class="tab-pane absolute inset-0 hidden overflow-y-auto p-8 bg-slate-50">
+                <div class="max-w-2xl bg-white rounded-2xl shadow-sm border border-slate-200 p-8">
+                    <h2 class="text-2xl font-black text-slate-800 mb-6">{{ _('settings') }} والذكاء الاصطناعي</h2>
+                    <form action="/merchant/{{ store.id }}/settings" method="POST" class="space-y-6">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        
+                        <div>
+                            <label class="block text-sm font-bold text-slate-700 mb-2">{{ _('ai_mode_target') }}</label>
+                            <select name="ai_mode" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-primary outline-none">
+                                <option value="sales" {% if store.ai_mode == 'sales' %}selected{% endif %}>{{ _('sales_persuasion_mode') }}</option>
+                                <option value="support" {% if store.ai_mode == 'support' %}selected{% endif %}>{{ _('tech_support_mode') }}</option>
+                                <option value="consultant" {% if store.ai_mode == 'consultant' %}selected{% endif %}>{{ _('objective_consultant_mode') }}</option>
+                                <option value="booking" {% if store.ai_mode == 'booking' %}selected{% endif %}>{{ _('booking_service_mode') }}</option>
+                            </select>
+                            <p class="text-xs text-slate-500 mt-2">يحدد هذا الخيار كيفية تصرف الذكاء الاصطناعي مع {{ _('customer_tb') }} وتوجيهه نحو الدفع أو الحجز أو الإرشاد.</p>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-bold text-slate-700 mb-2">{{ _('ai_tone_voice') }}</label>
+                            <select name="ai_tone" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-primary outline-none">
+                                <option value="professional" {% if store.ai_tone == 'professional' %}selected{% endif %}>{{ _('pro_formal_tone') }}</option>
+                                <option value="friendly" {% if store.ai_tone == 'friendly' %}selected{% endif %}>{{ _('friendly_welcoming_tone') }}</option>
+                                <option value="youth" {% if store.ai_tone == 'youth' %}selected{% endif %}>{{ _('youthful_vibrant_tone') }}</option>
+                                <option value="formal" {% if store.ai_tone == 'formal' %}selected{% endif %}>{{ _('strict_formal_tone') }}</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-bold text-slate-700 mb-2">{{ _('store_policy_opt') }}</label>
+                            <textarea name="policy" rows="4" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-primary outline-none" placeholder="{{ _('policy_placeholder') }}">{{ store.policy or '' }}</textarea>
+                            <p class="text-xs text-slate-500 mt-2">{{ _('policy_desc') }}</p>
+                        </div>
+
+                        <div class="pt-4 border-t border-slate-100 flex justify-end">
+                            <button type="submit" class="bg-primary hover:bg-indigo-700 text-white font-black px-8 py-3 rounded-xl transition shadow-md">{{ _('save') }} {{ _('settings_floppy') }}</button>
+                        </div>
+                    </form>
+                </div>
+
+                <div class="max-w-2xl bg-white rounded-2xl shadow-sm border border-slate-200 p-8 mt-6">
+                    <h3 class="text-xl font-black text-slate-800 mb-4">🧪 {{ _('ai_thinking_preview') }}</h3>
+                    <p class="text-slate-500 text-sm mb-4">{{ _('try_talking_to_assistant') }}</p>
+                    <div class="flex flex-col gap-3">
+                        <textarea id="previewInput" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-primary outline-none" rows="2" placeholder="{{ _('hello_how_to_order') }}"></textarea>
+                        <button type="button" onclick="testAI()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-black px-6 py-2 rounded-lg transition shadow-sm self-start flex items-center gap-2">{{ _('test_reply_btn') }}</button>
+                        <div id="previewResult" class="hidden mt-4 p-4 rounded-xl bg-slate-900 border border-slate-700 text-green-400 font-mono text-sm leading-relaxed whitespace-pre-wrap relative overflow-hidden shadow-inner"></div>
+                    </div>
+                </div>
+            </section>
+            
+        </div>
+    </main>
+
+    <!-- HTML5 Audio Element for Alerts -->
+    <audio id="alert-sound" src="https://actions.google.com/sounds/v1/alarms/beep_short.ogg" preload="auto"></audio>
+
+    <script>
+        // --- UI Safety Mechanisms ---
+        function bypassForm(event) {
+            if(!confirm("⚠️ {{ _('confirm_human_ai_toggle') }}")) {
+                event.preventDefault();
+            }
+        }
+        
+        async function testAI() {
+            const input = document.getElementById('previewInput').value;
+            const resBox = document.getElementById('previewResult');
+            if(!input.trim()) return;
+            
+            resBox.classList.remove('hidden');
+            resBox.innerHTML = '<span class="text-slate-400 font-bold animate-pulse">{{ _('processing_openai') }}</span>';
+            
+            const formData = new URLSearchParams();
+            formData.append('prompt', input);
+            formData.append('csrf_token', '{{ csrf_token() }}');
+            
+            try {
+                const res = await fetch('/api/preview_ai', { method: 'POST', body: formData });
+                const data = await res.json();
+                if(data.success) {
+                    resBox.innerHTML = `<span class="text-white bg-slate-800 px-2 py-1 rounded text-xs mb-2 inline-block shadow-sm">🤖 {{ _('virtual_assistant_reply') }}</span>\n<span class="text-emerald-300 font-sans font-medium text-base">${data.reply}</span>`;
+                } else {
+                    resBox.innerHTML = `<span class="text-red-400 font-bold">❌ خطأ: ${data.error}</span>`;
+                }
+            } catch(e) {
+                resBox.innerHTML = '<span class="text-red-400 font-bold">❌ {{ _('failed_server_conn') }}</span>';
+            }
+        }
+
+        // --- Navigation Logic ---
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab-pane').forEach(el => el.classList.add('hidden'));
+            document.querySelectorAll('[id^="nav-"]').forEach(el => {
+                el.classList.remove('bg-primary', 'text-white');
+                el.classList.add('text-slate-300', 'hover:bg-slate-800');
+            });
+            document.getElementById(`tab-${tabId}`).classList.remove('hidden');
+            let navBtn = document.getElementById(`nav-${tabId}`);
+            navBtn.classList.remove('text-slate-300', 'hover:bg-slate-800');
+            navBtn.classList.add('bg-primary', 'text-white');
+        }
+
+        // --- Chart.js Initialize (Dashboard) ---
+        const tokenChartDOM = document.getElementById('tokenChart');
+        if (tokenChartDOM) {
+            const chartData = {
+                labels: {{ chart_dates|tojson|safe }},
+                datasets: [{
+                    label: 'Tokens Used',
+                    data: {{ chart_tokens|tojson|safe }},
+                    fill: true,
+                    backgroundColor: 'rgba(79, 70, 229, 0.1)',
+                    borderColor: '#4f46e5',
+                    tension: 0.4,
+                    borderWidth: 2,
+                    pointRadius: 4,
+                    pointBackgroundColor: '#ec4899'
+                }]
+            };
+            new Chart(tokenChartDOM, {
+                type: 'line', data: chartData,
+                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } },
+                 scales: { x: { grid: { display:false } }, y: { beginAtZero: true, border: { dash: [4, 4] } } } }
+            });
+        }
+
+        // --- Chat CRM Logic ---
+        let currentStatusFilter = 'all';
+        function setFilter(status) {
+            currentStatusFilter = status;
+            document.querySelectorAll('.crm-filter-btn').forEach(btn => {
+                btn.classList.remove('bg-slate-800', 'text-white');
+                btn.classList.add('bg-slate-200', 'text-slate-700');
+            });
+            event.target.classList.remove('bg-slate-200', 'text-slate-700');
+            event.target.classList.add('bg-slate-800', 'text-white');
+            filterChats();
+        }
+
+        function filterChats() {
+            const query = document.getElementById('chatSearch').value.toLowerCase();
+            const items = document.querySelectorAll('.chat-item');
+            items.forEach(item => {
+                const name = item.getAttribute('data-name').toLowerCase();
+                const isHuman = item.getAttribute('data-human') === 'true';
+                
+                let matchesSearch = name.includes(query);
+                let matchesFilter = true;
+                if (currentStatusFilter === 'human' && !isHuman) matchesFilter = false;
+                if (currentStatusFilter === 'ai' && isHuman) matchesFilter = false;
+                
+                item.style.display = (matchesSearch && matchesFilter) ? 'block' : 'none';
+            });
+        }
+
+        // Load active chat
+        async function openChat(storeId, userId, telegramId, name, requiresHuman) {
+            document.getElementById('chatEmptyState').classList.add('hidden');
+            document.getElementById('activeChatName').innerText = name;
+            
+            // Set Form Data
+            document.getElementById('activeStoreId').value = storeId;
+            document.getElementById('activeTelegramId').value = telegramId;
+            
+            // Setup AI Toggle Button
+            const aiBtn = document.getElementById('aiToggleBtn');
+            const toggleForm = document.getElementById('aiToggleForm');
+            toggleForm.action = `/merchant/${storeId}/toggle_ai/${userId}`;
+            
+            if (requiresHuman) {
+                document.getElementById('activeChatStatus').innerHTML = '<span class="text-red-500">تدخل بشري معلق 🔴</span>';
+                aiBtn.className = "text-xs font-bold px-4 py-2 rounded-lg transition shadow-sm border bg-green-50 text-green-700 border-green-200 hover:bg-green-100";
+                aiBtn.innerText = "▶️ تفعيل AI";
+            } else {
+                document.getElementById('activeChatStatus').innerHTML = '<span class="text-green-600">{{ _('ai_active_btn') }}</span>';
+                aiBtn.className = "text-xs font-bold px-4 py-2 rounded-lg transition shadow-sm border bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100";
+                aiBtn.innerText = "⏸️ إيقاف AI مؤقتاً";
+            }
+
+            // Fetch Messages via AJAX (Pagination mechanism for limits)
+            const canvas = document.getElementById('chatCanvas');
+            canvas.innerHTML = '<div class="text-center text-slate-400 mt-10">جاري تحميل الرسائل...</div>';
+            
+            try {
+                const res = await fetch(`/api/merchant/${storeId}/messages/${userId}?page=1`);
+                const data = await res.json();
+                canvas.innerHTML = '';
+                
+                data.messages.forEach(msg => {
+                    const isAi = msg.role === 'assistant';
+                    const bubble = document.createElement('div');
+                    bubble.className = `max-w-[80%] p-4 rounded-xl text-sm shadow-sm relative ${
+                        isAi ? 'bg-white border border-slate-100 self-start rounded-tr-none text-slate-800' 
+                             : 'bg-primary text-white self-end rounded-tl-none'
+                    }`;
+                    bubble.innerHTML = `
+                        <p class="leading-relaxed whitespace-pre-wrap">${msg.content}</p>
+                        <span class="text-[10px] absolute -bottom-4 right-1 opacity-50 text-slate-500">${msg.time}</span>
+                    `;
+                    canvas.appendChild(bubble);
+                });
+                
+                // Scroll to bottom natively
+                canvas.scrollTop = canvas.scrollHeight;
+            } catch(e) {
+                canvas.innerHTML = '<div class="text-center text-red-500">حدث خطأ في جلب الشبكة.</div>';
+            }
+        }
+
+        // Submit Reply form via AJAX
+        async function submitReply(event, forceAction = 'reply') {
+            event.preventDefault();
+            const storeId = document.getElementById('activeStoreId').value;
+            const telegramId = document.getElementById('activeTelegramId').value;
+            const msgInput = document.getElementById('replyInput');
+            const token = document.getElementById('replyCsrf').value;
+            const text = msgInput.value;
+            
+            if(!text.trim() && forceAction !== 'resolve') return;
+            msgInput.value = ''; // clear input
+            
+            // Optimistic UI append
+            if(text.trim()){
+                const canvas = document.getElementById('chatCanvas');
+                const bubble = document.createElement('div');
+                bubble.className = 'max-w-[80%] p-3 rounded-xl text-sm shadow-sm relative bg-slate-800 text-white self-end rounded-tl-none opacity-80';
+                bubble.innerHTML = `<p>${text}</p><span class="text-[10px] text-slate-400">الآن (رد المتجر)</span>`;
+                canvas.appendChild(bubble);
+                canvas.scrollTop = canvas.scrollHeight;
+            }
+
+            try {
+                // Post form endpoint expects x-www-form-urlencoded
+                const formData = new URLSearchParams();
+                formData.append('reply_msg', text);
+                formData.append('action_val', forceAction);
+                formData.append('csrf_token', token);
+
+                const response = await fetch(`/merchant/${storeId}/reply/${telegramId}`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                    body: formData.toString()
+                });
+                if(forceAction === 'resolve') location.reload();
+            } catch(e) { console.error('Failed to reply', e); }
+        }
+
+        // Live EventSource SSE
+        const sse = new EventSource("/merchant/{{ store.id }}/stream");
+        sse.onmessage = function(e) {
+            const data = JSON.parse(e.data);
+            if(data.type === "message_received" || data.type === "ai_reply") {
+                // Play HTML5 sound alert
+                document.getElementById('alert-sound').play().catch(e => console.log('Audio blocked by browser.'));
+                // Show floating toast
+                const toast = document.createElement('div');
+                toast.className = 'fixed bottom-4 left-4 bg-white border border-slate-200 text-slate-800 p-4 rounded-xl shadow-2xl z-50 flex gap-3 animate-bounce max-w-sm';
+                toast.innerHTML = `
+                    <div class="text-3xl">${data.type === 'ai_reply' ? '🤖' : '👤'}</div>
+                    <div class="flex flex-col">
+                        <span class="text-xs font-black text-slate-400">إشعار مباشر</span>
+                        <p class="text-sm font-bold truncate">${data.data.content}</p>
+                    </div>
+                `;
+                document.body.appendChild(toast);
+                setTimeout(() => toast.remove(), 4000);
+            }
+        };
+    </script>
+</body>
+</html>

@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Global Live Feed - Super Admin</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>@import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700;900&display=swap'); body { font-family: 'Tajawal', sans-serif; }</style>
+</head>
+<body class="bg-gray-900 text-white min-h-screen flex">
+    
+    <!-- Sidebar -->
+    <aside class="w-64 flex flex-col justify-between bg-gray-950 border-l border-gray-800 shrink-0">
+        <div>
+            <div class="h-20 flex items-center justify-center border-b border-gray-800 shadow-sm relative overflow-hidden">
+                <div class="absolute inset-0 bg-gradient-to-tr from-purple-900/30 to-blue-900/30"></div>
+                <h1 class="text-xl font-black text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-blue-400 relative z-10 flex items-center gap-2">
+                    <span class="text-2xl">⚡</span> SuperAdmin
+                </h1>
+            </div>
+            <nav class="p-4 space-y-2 mt-4">
+                <a href="/admin/dashboard" class="flex items-center gap-3 px-4 py-3 rounded-xl text-gray-400 hover:bg-gray-900 hover:text-white transition font-medium">
+                    <span class="text-xl">📊</span> {{ _('overview_nav') }}
+                </a>
+                <a href="/admin/stores" class="flex items-center gap-3 px-4 py-3 rounded-xl text-gray-400 hover:bg-gray-900 hover:text-white transition font-medium">
+                    <span class="text-xl">🏪</span> {{ _('manage_stores') }}
+                </a>
+                <a href="/admin/live_feed" class="flex items-center gap-3 px-4 py-3 rounded-xl bg-purple-600 shadow-lg shadow-purple-900/20 font-bold transition">
+                    <span class="text-xl">🌐</span> {{ _('global_live_feed') }}
+                </a>
+            </nav>
+        </div>
+        <div class="p-4">
+            <a href="/admin/logout" class="block text-center w-full px-4 py-3 rounded-xl bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white transition font-bold">{{ _('logout') }}</a>
+        </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="flex-1 flex flex-col h-screen overflow-hidden">
+        <!-- Topbar -->
+        <header class="h-20 bg-gray-900 border-b border-gray-800 flex items-center justify-between px-8 shrink-0">
+            <h2 class="text-xl font-black flex items-center gap-3">
+                <span class="relative flex h-3 w-3">
+                    <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                    <span class="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
+                </span>
+                {{ _('platform_live_broadcast') }}
+            </h2>
+            <div class="flex items-center gap-4">
+                <div class="flex items-center gap-2">
+                    <a href="/set_lang/ar" class="text-xs font-bold px-3 py-1.5 rounded-lg border {% if session.get('lang', 'ar') == 'ar' %}bg-purple-600 text-white border-purple-600{% else %}bg-gray-800 text-gray-400 border-gray-700 hover:bg-gray-700{% endif %} transition">عربي</a>
+                    <a href="/set_lang/en" class="text-xs font-bold px-3 py-1.5 rounded-lg border {% if session.get('lang', 'ar') == 'en' %}bg-purple-600 text-white border-purple-600{% else %}bg-gray-800 text-gray-400 border-gray-700 hover:bg-gray-700{% endif %} transition">EN</a>
+                    <a href="/set_lang/tr" class="text-xs font-bold px-3 py-1.5 rounded-lg border {% if session.get('lang', 'ar') == 'tr' %}bg-purple-600 text-white border-purple-600{% else %}bg-gray-800 text-gray-400 border-gray-700 hover:bg-gray-700{% endif %} transition">TR</a>
+                </div>
+                <div class="text-sm bg-gray-800 py-2 px-4 rounded-full border border-gray-700 font-mono text-gray-400">
+                    Listening to <span class="text-blue-400">store_*</span> events
+                </div>
+            </div>
+        </header>
+
+        <!-- Scrollable Space -->
+        <div class="flex-1 overflow-y-auto p-8 bg-black/40" id="feed-container">
+            <!-- Feed items will be prepended here -->
+            <div id="initial-message" class="text-center text-gray-500 mt-20 flex flex-col items-center">
+                <svg class="w-16 h-16 mb-4 opacity-20 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                <p class="font-bold text-lg">{{ _('waiting_live_events') }}</p>
+                <p class="text-sm">{{ _('events_will_display_here') }}</p>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const feedContainer = document.getElementById('feed-container');
+            const initialMsg = document.getElementById('initial-message');
+            
+            const source = new EventSource('/admin/stream');
+            
+            source.onmessage = function(event) {
+                if(initialMsg) initialMsg.style.display = 'none';
+                
+                let data;
+                try {
+                    data = JSON.parse(event.data);
+                } catch(e) {
+                    console.error("Unknown payload:", event.data);
+                    return;
+                }
+                
+                const card = document.createElement('div');
+                card.className = 'bg-gray-800 border-l-4 p-5 rounded-r-2xl shadow-xl transform transition-all translate-y-[-20px] opacity-0 flex items-start gap-4 mb-4 border border-gray-700';
+                
+                let icon = '🔔';
+                let colorClass = 'border-l-gray-500';
+                let title = "{{ _('new_event_title') }}";
+                let desc = JSON.stringify(data.data);
+                
+                if(data.type === 'message' || data.type === 'message_received') {
+                    icon = '💬'; colorClass = 'border-l-blue-500';
+                    title = "{{ _('customer_msg_title') }}";
+                    desc = `<strong class="text-blue-300">${data.data.username || data.data.sender || "{{ _('user_anonymous') }}"}</strong>: ${data.data.text || data.data.content || '...'}`;
+                } else if (data.type === 'order_status') {
+                    icon = '🛍️'; colorClass = 'border-l-green-500';
+                    title = "{{ _('order_status_update_title') }}";
+                    desc = `طلب رقم #${data.data.order_id} ➔ ${data.data.status}`;
+                } else if (data.type === 'ai_reply') {
+                    icon = '🤖'; colorClass = 'border-l-purple-500';
+                    title = 'رد الذكاء الاصطناعي';
+                    desc = `${data.data.reply || data.data.response || '...'}`;
+                } else if (data.type === 'new_order') {
+                    icon = '💰'; colorClass = 'border-l-yellow-500';
+                    title = 'طلب جديد متكامل!';
+                    desc = `قيمة: ${data.data.total_amount}`;
+                }
+
+                card.classList.add(colorClass);
+                
+                let actionsHtml = '';
+                if (data.store_id) {
+                    let senderId = data.data.sender || data.data.user_id || '';
+                    let pauseBtn = senderId ? `<button onclick="adminAction('pause_ai', ${data.store_id}, '${senderId}')" class="text-[10px] bg-yellow-500/10 text-yellow-400 hover:bg-yellow-500 hover:text-black px-3 py-1 rounded transition border border-yellow-500/20 font-bold uppercase tracking-wider">⏸️ Pause AI</button>` : '';
+                    
+                    actionsHtml = `
+                        <div class="mt-4 pt-3 border-t border-gray-700/50 flex gap-2">
+                            ${pauseBtn}
+                            <button onclick="adminAction('suspend_store', ${data.store_id})" class="text-[10px] bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white px-3 py-1 rounded transition border border-red-500/20 font-bold uppercase tracking-wider">⛔ Suspend Store</button>
+                        </div>
+                    `;
+                }
+
+                card.innerHTML = `
+                    <div class="text-4xl filter drop-shadow-md">${icon}</div>
+                    <div class="flex-1 w-full overflow-hidden">
+                        <div class="flex justify-between items-center mb-2">
+                            <strong class="text-white text-lg tracking-wide">${title}</strong>
+                            <div class="flex gap-2">
+                                <span class="bg-gray-900 border border-gray-700 text-gray-300 text-xs px-2 py-1 rounded shadow-inner font-mono">Store #${data.store_id || '?'}</span>
+                                <span class="bg-gray-900 border border-gray-700 text-gray-500 text-xs px-2 py-1 rounded shadow-inner font-mono">${new Date().toLocaleTimeString()}</span>
+                            </div>
+                        </div>
+                        <div class="text-gray-300 text-sm leading-relaxed break-words font-medium">${desc}</div>
+                        ${actionsHtml}
+                    </div>
+                `;
+                
+                feedContainer.insertBefore(card, feedContainer.firstChild);
+                
+                // Allow DOM to process insertion, then trigger CSS transition
+                setTimeout(() => {
+                    card.classList.remove('translate-y-[-20px]', 'opacity-0');
+                }, 50);
+                
+                // Limit
+                if(feedContainer.children.length > 200) {
+                    feedContainer.removeChild(feedContainer.lastChild);
+                }
+            };
+            
+            source.onerror = function() {
+                console.error("SSE Connection Error. Attempting to reconnect...");
+            };
+        });
+
+        async function adminAction(action, storeId, telegramId='') {
+            if(!confirm(`تأكيد الإجراء: ${action}؟`)) return;
+            try {
+                let url = action === 'suspend_store' 
+                    ? `/admin/action/suspend_store/${storeId}` 
+                    : `/admin/action/pause_ai/${storeId}/${telegramId}`;
+                    
+                const res = await fetch(url, { method: 'POST' });
+                const json = await res.json();
+                if(json.status === 'success') {
+                    alert('تم تنفيذ الإجراء بنجاح ✅');
+                } else {
+                    alert('Error: ' + json.message);
+                }
+            } catch(e) {
+                alert('فشل الاتصال بالخادم');
+            }
+        }
+    </script>
+</body>
+</html>

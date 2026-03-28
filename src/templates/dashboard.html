@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <title>SaaS Super Admin - الإصدار 4.0</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700;900&display=swap');
+        body { font-family: 'Tajawal', sans-serif; background-color: #f3f4f6; }
+    </style>
+</head>
+<body class="text-gray-800">
+    <div class="flex h-screen">
+        <!-- Sidebar -->
+        <div class="w-64 bg-gray-900 text-white min-h-screen p-6 shadow-xl z-10 flex flex-col">
+            <h2 class="text-2xl font-black mb-2 text-blue-400">{{ t('dashboard_title') }}</h2>
+            <p class="text-xs text-gray-400 mb-8 border-b border-gray-700 pb-4">{{ t('admin_ceo_sub') }}</p>
+            <ul class="flex-1">
+                <li class="mb-4"><a href="#stats" class="block w-full hover:bg-gray-800 p-2 rounded transition">📊 {{ t('stats') }}</a></li>
+                <li class="mb-4"><a href="#stores" class="block w-full text-blue-400 bg-gray-800 font-bold p-2 rounded transition">🏪 {{ t('manage_stores') }}</a></li>
+            </ul>
+        </div>
+        
+        <!-- Main Content -->
+        <div class="flex-1 p-10 overflow-y-auto relative">
+            
+            <!-- Flash Messages -->
+            {% with messages = get_flashed_messages(with_categories=true) %}
+              {% if messages %}
+                <div class="fixed top-5 left-1/2 transform -translate-x-1/2 z-50 w-full max-w-2xl">
+                {% for category, message in messages %}
+                  <div class="p-4 mb-4 text-sm rounded-lg shadow-lg {% if category == 'error' %}bg-red-100 text-red-800{% else %}bg-green-100 text-green-800{% endif %}">
+                    <span class="font-medium">إشعار:</span> {{ message }}
+                  </div>
+                {% endfor %}
+                </div>
+              {% endif %}
+            {% endwith %}
+
+            <div class="flex justify-between items-center mb-8">
+                <div>
+                    <h1 class="text-3xl font-black text-gray-800">{{ t('super_admin') }}</h1>
+                    <p class="text-gray-500 mt-2">{{ t('admin_desc') }}</p>
+                </div>
+                <div class="flex items-center gap-4">
+                    <div class="flex bg-gray-100 rounded-lg p-1">
+                        <a href="/set_lang/ar" class="px-3 py-1 rounded text-sm font-bold {% if lang == 'ar' %}bg-white shadow text-blue-600{% else %}text-gray-500 hover:text-gray-800{% endif %}">🇸🇦 العربية</a>
+                        <a href="/set_lang/en" class="px-3 py-1 rounded text-sm font-bold {% if lang == 'en' %}bg-white shadow text-blue-600{% else %}text-gray-500 hover:text-gray-800{% endif %}">🇬🇧 English</a>
+                        <a href="/set_lang/tr" class="px-3 py-1 rounded text-sm font-bold {% if lang == 'tr' %}bg-white shadow text-blue-600{% else %}text-gray-500 hover:text-gray-800{% endif %}">🇹🇷 Türkçe</a>
+                    </div>
+                    <span class="bg-green-100 text-green-800 text-sm font-black px-4 py-2 rounded-full border border-green-200 shadow-sm flex items-center gap-2">النظام متصل <div class="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div></span>
+                </div>
+            </div>
+            
+            <!-- Stats -->
+            <div id="stats" class="grid grid-cols-4 gap-6 mb-12">
+                <div class="bg-white p-6 rounded-xl shadow-sm border-t-4 border-blue-500">
+                    <h3 class="text-gray-500 text-sm font-bold mb-1">{{ t('revenue_sub') }}</h3>
+                    <p class="text-4xl font-black text-blue-600">${{ stores | sum(attribute='subscription_fee') }}</p>
+                </div>
+                <div class="bg-white p-6 rounded-xl shadow-sm border-t-4 border-green-500">
+                    <h3 class="text-gray-500 text-sm font-bold mb-1">{{ t('licenses_granted') }}</h3>
+                    <p class="text-4xl font-black text-green-600">{{ stores|length }}</p>
+                </div>
+                <div class="bg-white p-6 rounded-xl shadow-sm border-t-4 border-purple-500">
+                    <h3 class="text-gray-500 text-sm font-bold mb-1">{{ t('active_stores') }}</h3>
+                    <p class="text-4xl font-black text-purple-600">{{ stores | selectattr('is_active', 'equalto', True) | list | length }}</p>
+                </div>
+            </div>
+            
+            <!-- Add Store Form -->
+            <div class="bg-white p-8 rounded-xl shadow-sm mb-12 border border-blue-100 relative overflow-hidden">
+                <div class="absolute top-0 right-0 w-2 h-full bg-blue-500"></div>
+                <h3 class="text-xl font-black mb-2 text-blue-800">➕ {{ t('add_tenant') }}</h3>
+                <p class="text-sm text-gray-500 mb-6">{{ t('add_bot_info') }}</p>
+                
+                <form action="/dashboard/add_store" method="POST" class="grid grid-cols-3 gap-6">
+                    <!-- Column 1 -->
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 mb-1">{{ t('store_name') }} {{ t('or_company') }}</label>
+                        <input type="text" name="name" class="border border-gray-300 p-2 w-full rounded outline-none focus:border-blue-500" required>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 mb-1">{{ t('owner_name_full') }}</label>
+                        <input type="text" name="owner_name" class="border border-gray-300 p-2 w-full rounded outline-none focus:border-blue-500">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 mb-1">{{ t('owner_phone') }} *</label>
+                        <input type="text" name="owner_phone" class="border border-gray-300 p-2 w-full rounded outline-none focus:border-blue-500" dir="ltr" required>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 mb-1">البريد الإلكتروني للشكاوي *</label>
+                        <input type="email" name="owner_email" class="border border-gray-300 p-2 w-full rounded outline-none focus:border-blue-500" dir="ltr" required>
+                    </div>
+                    
+                    <!-- Column 2 -->
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 mb-1">{{ t('sub_fee') }}</label>
+                        <input type="number" step="0.01" name="fee" class="border border-gray-300 p-2 w-full rounded outline-none focus:border-blue-500" placeholder="مثال: 50.0">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 mb-1">{{ t('subscription_duration') }}</label>
+                        <input type="number" name="expires_in" class="border border-gray-300 p-2 w-full rounded outline-none focus:border-blue-500" placeholder="مثال: 30" required>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 mb-1">{{ t('store_country') }}</label>
+                        <input type="text" name="country" class="border border-gray-300 p-2 w-full rounded outline-none focus:border-blue-500">
+                    </div>
+
+                    <!-- Branches -->
+                    <div class="col-span-3">
+                        <label class="block text-xs font-bold text-gray-500 mb-1">أسماء الفروع (إن وجدت، مفصولة بفاصلة ليتعرف عليها البوت)</label>
+                        <input type="text" name="branch_names" class="border border-gray-300 p-2 w-full rounded outline-none focus:border-blue-500" placeholder="مثال: فرع الرياض، فرع الدمام">
+                    </div>
+
+                    <!-- Column 3 (Tokens) -->
+                    <div class="col-span-3 border-t border-gray-100 pt-4 mt-2">
+                        <label class="block text-sm font-black text-gray-700 mb-3">{{ t('link_accounts') }}</label>
+                        <div class="grid grid-cols-3 gap-6">
+                            <div>
+                                <label class="block text-xs font-bold text-blue-500 mb-1">🤖 {{ t('telegram_token_req') }}</label>
+                                <input type="text" name="telegram_token" class="border border-gray-300 p-2 w-full rounded outline-none focus:border-blue-500 font-mono text-left" dir="ltr" required>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-green-500 mb-1">💬 {{ t('whatsapp_token_opt') }}</label>
+                                <input type="text" name="whatsapp_token" class="border border-gray-300 p-2 w-full rounded bg-gray-50 font-mono text-left" dir="ltr">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-pink-500 mb-1">📸 {{ t('instagram_token_opt') }}</label>
+                                <input type="text" name="instagram_token" class="border border-gray-300 p-2 w-full rounded bg-gray-50 font-mono text-left" dir="ltr">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-span-3 flex justify-end mt-4">
+                        <button type="submit" class="bg-blue-600 text-white px-10 py-3 rounded-lg font-black hover:bg-blue-700 shadow-md">{{ t('bot_license_btn') }}</button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Stores List -->
+            <div id="stores" class="mb-12">
+                <h2 class="text-2xl font-black mb-6 text-gray-800 border-b pb-2">🏪 {{ t('tenants') }}</h2>
+                <div class="bg-white rounded-xl shadow-sm overflow-hidden border border-gray-100">
+                    <table class="w-full text-right text-sm">
+                        <thead class="bg-gray-100">
+                            <tr>
+                                <th class="p-4 text-gray-600">ID</th>
+                                <th class="p-4 text-gray-600">{{ t('store_name') }} / البلد</th>
+                                <th class="p-4 text-gray-600 text-center">{{ t('owner_contact') }}</th>
+                                <th class="p-4 text-gray-600 text-center">{{ t('revenue_usd') }}</th>
+                                <th class="p-4 text-gray-600 text-center">{{ t('contract_validity') }}</th>
+                                <th class="p-4 text-gray-600 text-center">{{ t('status') }}</th>
+                                <th class="p-4 text-gray-600 text-center">{{ t('login_merchant') }}</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for s in stores %}
+                            <tr class="border-t border-gray-50 hover:bg-gray-50 transition">
+                                <td class="p-4 font-mono text-gray-400 font-bold">#{{ s.id }}</td>
+                                <td class="p-4">
+                                    <div class="font-black text-gray-800 text-base">{{ s.name }}</div>
+                                    <div class="text-xs text-gray-400 mt-1">{{ s.country or 'غير محدد' }} | لغة: {{ s.language }}</div>
+                                </td>
+                                <td class="p-4 text-center">
+                                    <div class="font-bold text-gray-700">{{ s.owner_name or '---' }}</div>
+                                    <div class="text-xs text-blue-500 font-mono dir-ltr mt-1">{{ s.owner_phone or '---' }}</div>
+                                </td>
+                                <td class="p-4 text-center font-black text-green-600 text-lg">${{ s.subscription_fee }}</td>
+                                <td class="p-4 text-center">
+                                    <div class="font-bold text-red-500">{{ time_until(s.expires_at) }}</div>
+                                    <div class="text-xs text-gray-400 mt-1">{{ s.expires_at.strftime('%Y-%m-%d') if s.expires_at else 'مفتوح' }}</div>
+                                </td>
+                                <td class="p-4 text-center">
+                                    <form action="/dashboard/toggle_store/{{ s.id }}" method="POST">
+                                        {% if s.is_active %}
+                                        <button type="submit" class="bg-green-100 text-green-800 text-xs font-bold px-3 py-1 rounded-full border border-green-200 hover:bg-red-100 hover:text-red-800 transition" title="انقر للإيقاف">{{ t('active_dot') }}</button>
+                                        {% else %}
+                                        <button type="submit" class="bg-red-100 text-red-800 text-xs font-bold px-3 py-1 rounded-full border border-red-200 hover:bg-green-100 hover:text-green-800 transition" title="انقر للتفعيل">{{ t('disabled_dot') }}</button>
+                                        {% endif %}
+                                    </form>
+                                </td>
+                                <td class="p-4 text-center">
+                                    <div class="flex items-center justify-center gap-2">
+                                        <a href="/dashboard/edit_store/{{ s.id }}" class="bg-blue-100 text-blue-700 hover:bg-blue-200 font-bold py-1 px-3 rounded text-xs transition">
+                                            {{ t('edit') }}
+                                        </a>
+                                        <a href="/merchant/{{ s.id }}" target="_blank" class="bg-purple-100 text-purple-700 hover:bg-purple-200 font-bold py-2 px-4 rounded-lg inline-block transition shadow-sm text-xs">
+                                            {{ t('merchant_dash') }}
+                                        </a>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                            {% if not stores %}
+                            <tr><td colspan="7" class="p-8 text-center text-gray-400">{{ t('no_stores') }}</td></tr>
+                            {% endif %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

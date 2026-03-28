@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <title>تسجيل الدخول - AI Sales SaaS</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700;900&display=swap');
+        body { font-family: 'Tajawal', sans-serif; }
+    </style>
+</head>
+<body class="bg-slate-50 h-screen flex items-center justify-center">
+
+    <div class="bg-white p-10 rounded-2xl shadow-xl w-full max-w-md border border-slate-100">
+        <div class="text-center mb-8">
+            <h1 class="text-3xl font-black text-indigo-900 mb-2">تسجيل الدخول</h1>
+            <p class="text-gray-500 text-sm">لوحة تحكم التجّار - AI Sales SaaS</p>
+        </div>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="p-3 mb-6 text-sm rounded-lg {% if category == 'error' %}bg-red-50 text-red-700 border border-red-200{% else %}bg-green-50 text-green-700 border border-green-200{% endif %}">
+                        {{ message }}
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <form action="/login" method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="mb-5">
+                <label class="block text-sm font-bold text-gray-700 mb-2">رقم المتجر (Store ID)</label>
+                <input type="text" name="store_id" class="w-full border border-gray-300 p-3 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 text-left dir-ltr" required placeholder="مثال: 1">
+            </div>
+            
+            <div class="mb-8">
+                <label class="block text-sm font-bold text-gray-700 mb-2">كلمة المرور</label>
+                <input type="password" name="password" class="w-full border border-gray-300 p-3 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 text-left dir-ltr" required placeholder="••••••••">
+            </div>
+
+            <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-black py-3 rounded-xl transition shadow-md">
+                دخول مبنى التحكم 🚀
+            </button>
+        </form>
+    </div>
+
+</body>
+</html>

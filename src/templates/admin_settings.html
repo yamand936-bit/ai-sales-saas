@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ _('admin_settings_title') if _ else "إعدادات النظام - Super Admin" }}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>@import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700;900&display=swap'); body { font-family: 'Tajawal', sans-serif; }</style>
+</head>
+<body class="bg-gray-900 text-white min-h-screen flex">
+    
+    <!-- Sidebar -->
+    <aside class="w-64 flex flex-col justify-between bg-gray-950 border-l border-gray-800 shrink-0">
+        <div>
+            <div class="h-20 flex items-center justify-center border-b border-gray-800 shadow-sm relative overflow-hidden">
+                <div class="absolute inset-0 bg-gradient-to-tr from-purple-900/30 to-blue-900/30"></div>
+                <h1 class="text-xl font-black text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-blue-400 relative z-10 flex items-center gap-2">
+                    <span class="text-2xl">⚡</span> SuperAdmin
+                </h1>
+            </div>
+            <nav class="p-4 space-y-2 mt-4">
+                <a href="/admin/dashboard" class="flex items-center gap-3 px-4 py-3 rounded-xl text-gray-400 hover:bg-gray-900 hover:text-white transition font-medium">
+                    <span class="text-xl">📊</span> {{ _('stats') if _ else "لوحة القيادة" }}
+                </a>
+                <a href="/admin/stores" class="flex items-center gap-3 px-4 py-3 rounded-xl text-gray-400 hover:bg-gray-900 hover:text-white transition font-medium">
+                    <span class="text-xl">🏪</span> {{ _('manage_stores') if _ else "المتاجر" }}
+                </a>
+                <a href="/admin/settings" class="flex items-center gap-3 px-4 py-3 rounded-xl bg-purple-600 shadow-lg shadow-purple-900/20 font-bold transition">
+                    <span class="text-xl">⚙️</span> {{ _('sys_settings_menu') if _ else "إعدادات النظام" }}
+                </a>
+            </nav>
+        </div>
+        <div class="p-4">
+            <a href="/admin/logout" class="block text-center w-full px-4 py-3 rounded-xl bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white transition font-bold">{{ _('logout') if _ else "خروج" }}</a>
+        </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="flex-1 flex flex-col h-screen overflow-hidden">
+        <!-- Topbar -->
+        <header class="h-20 bg-gray-900 border-b border-gray-800 flex items-center justify-between px-8 shrink-0">
+            <h2 class="text-lg font-bold">{{ _('general_system_settings') if _ else "إعدادات النظام العامة" }}</h2>
+        </header>
+
+        <!-- Scrollable Space -->
+        <div class="flex-1 overflow-y-auto p-8 space-y-8">
+            
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="p-4 rounded-xl {{ 'bg-red-900/50 text-red-200 border border-red-800' if category == 'error' else 'bg-green-900/50 text-green-200 border border-green-800' }}">
+                            {{ message }}
+                        </div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                
+                <!-- Add New or Edit Setting -->
+                <div class="bg-gray-800 rounded-2xl p-6 border border-gray-700 shadow-xl">
+                    <h3 class="text-lg font-black mb-4">{{ _('update_setting') if _ else "تحديث إعداد" }}</h3>
+                    <form method="POST" class="space-y-4">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                        <div>
+                            <label class="block text-gray-400 text-sm font-bold mb-2">{{ _('setting_key_label') if _ else "مفتاح الإعداد (Key)" }}</label>
+                            <input name="key" placeholder="{{ _('example_free_limit') if _ else 'مثال: free_limit' }}" required class="w-full bg-gray-900 border border-gray-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition">
+                        </div>
+                        <div>
+                            <label class="block text-gray-400 text-sm font-bold mb-2">{{ _('update_value_label') if _ else "تحديث القيمة (Value)" }}</label>
+                            <input name="value" placeholder="{{ _('value_placeholder') if _ else 'القيمة' }}" required class="w-full bg-gray-900 border border-gray-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition">
+                        </div>
+                        <button type="submit" class="w-full py-3 bg-purple-600 hover:bg-purple-700 rounded-xl font-bold mt-4 transition shadow-lg shadow-purple-900/20">
+                            {{ _('save_setting_btn') if _ else "حفظ الإعداد" }}
+                        </button>
+                    </form>
+                </div>
+
+                <!-- Existing Settings -->
+                <div class="bg-gray-800 rounded-2xl p-6 border border-gray-700 shadow-xl">
+                    <h3 class="text-lg font-black mb-4">{{ _('current_settings') if _ else "الإعدادات الحالية" }}</h3>
+                    <div class="space-y-3">
+                        {% for s in settings %}
+                        <div class="flex justify-between items-center p-3 bg-gray-900 rounded-lg border border-gray-700">
+                            <span class="font-bold text-gray-300">{{ s.key }}</span>
+                            <span class="text-purple-400 font-mono bg-purple-500/10 px-2 py-1 rounded">{{ s.value }}</span>
+                        </div>
+                        {% else %}
+                        <p class="text-gray-500 italic text-sm">{{ _('no_settings_yet') if _ else "لا توجد إعدادات بعد." }}</p>
+                        {% endfor %}
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </main>
+
+</body>
+</html>

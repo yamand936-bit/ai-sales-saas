@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Enterprise Super Admin</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>@import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700;900&display=swap'); body { font-family: 'Tajawal', sans-serif; }</style>
+</head>
+<body class="bg-gray-900 text-white min-h-screen flex">
+    
+    <!-- Sidebar -->
+    <aside class="w-64 flex flex-col justify-between bg-gray-950 border-l border-gray-800 shrink-0">
+        <div>
+            <div class="h-20 flex items-center justify-center border-b border-gray-800 shadow-sm relative overflow-hidden">
+                <div class="absolute inset-0 bg-gradient-to-tr from-purple-900/30 to-blue-900/30"></div>
+                <h1 class="text-xl font-black text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-blue-400 relative z-10 flex items-center gap-2">
+                    <span class="text-2xl">⚡</span> SuperAdmin
+                </h1>
+            </div>
+            <nav class="p-4 space-y-2 mt-4">
+                <a href="/admin/dashboard" class="flex items-center gap-3 px-4 py-3 rounded-xl bg-purple-600 shadow-lg shadow-purple-900/20 font-bold transition">
+                    <span class="text-xl">📊</span> {{ _('stats') }}
+                </a>
+                <a href="/admin/stores" class="flex items-center gap-3 px-4 py-3 rounded-xl text-gray-400 hover:bg-gray-900 hover:text-white transition font-medium">
+                    <span class="text-xl">🏪</span> {{ _('manage_stores') }}
+                </a>
+                <a href="/admin/live_feed" class="flex items-center gap-3 px-4 py-3 rounded-xl text-gray-400 hover:bg-gray-900 hover:text-white transition font-medium">
+                    <span class="text-xl">🌐</span> {{ _('global_live_feed') }}
+                </a>
+            </nav>
+        </div>
+        <div class="p-4">
+            <a href="/admin/logout" class="block text-center w-full px-4 py-3 rounded-xl bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white transition font-bold">{{ _('logout') }}</a>
+        </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="flex-1 flex flex-col h-screen overflow-hidden">
+        <!-- Topbar -->
+        <header class="h-20 bg-gray-900 border-b border-gray-800 flex items-center justify-between px-8 shrink-0">
+            <h2 class="text-lg font-bold">{{ _('global_telemetry') }}</h2>
+            <div class="flex items-center gap-4">
+                <div class="flex items-center gap-2">
+                    <a href="/set_lang/ar" class="text-xs font-bold px-3 py-1.5 rounded-lg border {% if session.get('lang', 'ar') == 'ar' %}bg-purple-600 text-white border-purple-600{% else %}bg-gray-800 text-gray-400 border-gray-700 hover:bg-gray-700{% endif %} transition">عربي</a>
+                    <a href="/set_lang/en" class="text-xs font-bold px-3 py-1.5 rounded-lg border {% if session.get('lang', 'ar') == 'en' %}bg-purple-600 text-white border-purple-600{% else %}bg-gray-800 text-gray-400 border-gray-700 hover:bg-gray-700{% endif %} transition">EN</a>
+                    <a href="/set_lang/tr" class="text-xs font-bold px-3 py-1.5 rounded-lg border {% if session.get('lang', 'ar') == 'tr' %}bg-purple-600 text-white border-purple-600{% else %}bg-gray-800 text-gray-400 border-gray-700 hover:bg-gray-700{% endif %} transition">TR</a>
+                </div>
+                <div class="text-sm bg-gray-800 py-2 px-4 rounded-full border border-gray-700 flex items-center gap-2">
+                    <div class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
+                    {{ _('system_status') }}
+                </div>
+            </div>
+        </header>
+
+        <!-- Scrollable Space -->
+        <div class="flex-1 overflow-y-auto p-8 space-y-8">
+            
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="p-4 rounded-xl {{ 'bg-red-900/50 text-red-200 border border-red-800' if category == 'error' else 'bg-green-900/50 text-green-200 border border-green-800' }}">
+                            {{ message }}
+                        </div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+            
+            <!-- Global KPIs -->
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+                <!-- Revenue -->
+                <div class="bg-gray-800 rounded-2xl p-6 border border-gray-700 shadow-xl relative overflow-hidden group">
+                    <div class="absolute -right-6 -top-6 w-24 h-24 bg-green-500/10 rounded-full blur-2xl group-hover:scale-150 transition-transform duration-500"></div>
+                    <p class="text-gray-400 text-sm font-bold mb-1">{{ _('monthly_approx_revenue') }}</p>
+                    <div class="text-4xl font-black text-white flex items-baseline gap-1">
+                        {{ "{:,.0f}".format(total_revenue) }} <span class="text-lg font-bold text-green-400">{{ _('usd') }}</span>
+                    </div>
+                </div>
+                <!-- Global Tokens -->
+                <div class="bg-gray-800 rounded-2xl p-6 border border-gray-700 shadow-xl relative overflow-hidden group">
+                    <div class="absolute -right-6 -top-6 w-24 h-24 bg-purple-500/10 rounded-full blur-2xl group-hover:scale-150 transition-transform duration-500"></div>
+                    <p class="text-gray-400 text-sm font-bold mb-1">{{ _('global_token_usage') }}</p>
+                    <div class="text-4xl font-black text-white flex items-baseline gap-1">
+                        {{ "{:,.0f}".format(global_tokens) }} <span class="text-sm font-bold text-purple-400">{{ _('tokens_lbl') }}</span>
+                    </div>
+                </div>
+                <!-- Network Stats -->
+                <div class="bg-gray-800 rounded-2xl p-6 border border-gray-700 shadow-xl relative overflow-hidden group col-span-2">
+                    <div class="absolute -right-6 -top-6 w-24 h-24 bg-blue-500/10 rounded-full blur-2xl group-hover:scale-150 transition-transform duration-500"></div>
+                    <div class="flex justify-between items-center h-full">
+                        <div>
+                            <p class="text-gray-400 text-sm font-bold mb-1">{{ _('total_stores_kpi') }}</p>
+                            <div class="text-3xl font-black">{{ total_stores }}</div>
+                            <div class="text-xs text-gray-500 mt-2 flex gap-3">
+                                <span class="text-green-400">● {{ active_stores }} {{ _('active_kpi') }}</span>
+                                <span class="text-red-400">● {{ overdue_stores }} {{ _('overdue_kpi') }}</span>
+                            </div>
+                        </div>
+                        <div class="h-12 w-px bg-gray-700 mx-4"></div>
+                        <div>
+                            <p class="text-gray-400 text-sm font-bold mb-1">{{ _('messages_orders_today') }}</p>
+                            <div class="text-3xl font-black">{{ messages_today }} / {{ total_orders }}</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Global Chart -->
+            <div class="bg-gray-800 border border-gray-700 rounded-2xl p-6 shadow-xl">
+                <div class="flex justify-between items-center mb-6">
+                    <h3 class="text-lg font-black flex items-center gap-2">
+                        <span class="w-2 h-8 rounded bg-gradient-to-b from-purple-500 to-blue-500 inline-block"></span>
+                        {{ _('global_ai_usage_30d') }}
+                    </h3>
+                </div>
+                <div class="h-72 w-full">
+                    <canvas id="globalChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Audit Logs -->
+            <div class="bg-gray-800 border border-gray-700 rounded-2xl p-6 shadow-xl">
+                <h3 class="text-lg font-black mb-6">{{ _('audit_logs_header') }}</h3>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm text-right">
+                        <thead class="text-xs text-gray-400 bg-gray-900/50 uppercase border-b border-gray-700">
+                            <tr>
+                                <th class="px-4 py-3 rounded-tr-lg">ID</th>
+                                <th class="px-4 py-3">{{ _('date_time') }}</th>
+                                <th class="px-4 py-3">{{ _('action_taken') }}</th>
+                                <th class="px-4 py-3 rounded-tl-lg">{{ _('target_store_id') }}</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-700/50">
+                            {% for log in admin_logs %}
+                            <tr class="hover:bg-gray-700/20 transition">
+                                <td class="px-4 py-3 font-mono text-gray-500">#{{ log.id }}</td>
+                                <td class="px-4 py-3 text-gray-400 font-mono">{{ log.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                                <td class="px-4 py-3 font-bold text-blue-400">{{ log.action }}</td>
+                                <td class="px-4 py-3 font-mono">
+                                    {% if log.target_store_id %}
+                                        <a href="/admin/store/{{ log.target_store_id }}" class="text-purple-400 hover:underline">Store {{ log.target_store_id }}</a>
+                                    {% else %}
+                                        <span class="text-gray-600">-</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% else %}
+                            <tr><td colspan="4" class="px-4 py-8 text-center text-gray-500 italic">{{ _('no_logs_yet') }}</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            var ctx = document.getElementById('globalChart').getContext('2d');
+            var gradient = ctx.createLinearGradient(0, 0, 0, 400);
+            gradient.addColorStop(0, 'rgba(168, 85, 247, 0.4)');
+            gradient.addColorStop(1, 'rgba(59, 130, 246, 0.0)');
+            
+            var chartDates = {{ chart_dates | tojson }};
+            var chartTokens = {{ chart_tokens | tojson }};
+
+            new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: chartDates,
+                    datasets: [{
+                        label: 'Tokens المجمعة',
+                        data: chartTokens,
+                        borderColor: '#a855f7',
+                        backgroundColor: gradient,
+                        borderWidth: 3,
+                        pointBackgroundColor: '#3b82f6',
+                        pointBorderColor: '#1e3a8a',
+                        pointHoverBackgroundColor: '#fff',
+                        pointHoverBorderColor: '#a855f7',
+                        fill: true,
+                        tension: 0.4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false }, tooltip: { mode: 'index', intersect: false } },
+                    scales: {
+                        x: { grid: { display: false, drawBorder: false }, ticks: { color: '#9ca3af' } },
+                        y: { grid: { color: 'rgba(55, 65, 81, 0.5)', drawBorder: false }, ticks: { color: '#9ca3af' }, beginAtZero: true }
+                    },
+                    interaction: { mode: 'nearest', axis: 'x', intersect: false }
+                }
+            });
+        });
+    </script>
+</body>
+</html>
