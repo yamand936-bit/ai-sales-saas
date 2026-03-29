@@ -652,15 +652,24 @@
                 const responsePayload = await res.json();
                 
                 // Fix API RESPONSE HANDLING: handle standard payload or wrapped {data: [...]} 
-                let msgArray = responsePayload?.data?.messages || responsePayload?.messages || responsePayload?.data || [];
+                let msgArray = [];
+                if (responsePayload) {
+                    if (responsePayload.data && responsePayload.data.messages) {
+                        msgArray = responsePayload.data.messages;
+                    } else if (responsePayload.messages) {
+                        msgArray = responsePayload.messages;
+                    } else if (responsePayload.data) {
+                        msgArray = responsePayload.data;
+                    }
+                }
                 if (!Array.isArray(msgArray)) msgArray = [];
                 
                 canvas.innerHTML = '';
                 
-                // Add NULL SAFETY (optional chaining map/forEach)
-                msgArray?.forEach(msg => {
-                    const isAi = msg?.role === 'assistant';
-                    const content = msg?.content || '';
+                // Add NULL SAFETY
+                msgArray.forEach(msg => {
+                    const isAi = msg && msg.role === 'assistant';
+                    const content = (msg && msg.content) ? msg.content : '';
                     const bubble = document.createElement('div');
                     bubble.className = `max-w-[80%] p-4 rounded-xl text-sm shadow-sm relative ${
                         isAi ? 'bg-white border border-slate-100 self-start rounded-tr-none text-slate-800' 
@@ -668,7 +677,7 @@
                     }`;
                     bubble.innerHTML = `
                         <p class="leading-relaxed whitespace-pre-wrap">${content}</p>
-                        <span class="text-[10px] absolute -bottom-4 right-1 opacity-50 text-slate-500">${msg?.time || 'now'}</span>
+                        <span class="text-[10px] absolute -bottom-4 right-1 opacity-50 text-slate-500">${(msg && msg.time) ? msg.time : 'now'}</span>
                     `;
                     canvas.appendChild(bubble);
                 });
