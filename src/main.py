@@ -172,6 +172,11 @@ def admin_login():
         flash("Invalid Admin PIN", "error")
     return render_template("admin_login.html")
 
+@app.route("/admin")
+@app.route("/admin/")
+def admin_root():
+    return redirect("/admin/dashboard")
+
 @app.route("/admin/dashboard")
 @admin_required
 def admin_dashboard():
@@ -182,6 +187,9 @@ def admin_dashboard():
         total_stores = db.query(func.count(Store.id)).scalar() or 0
         overdue_stores = db.query(func.count(Store.id)).filter_by(payment_status='overdue').scalar() or 0
         
+        # Safe globals
+        total_orders = db.query(func.count(Order.id)).scalar() or 0
+        
         # Local import to prevent circular dependency
         from src.chat.models import AILog
         global_tokens = db.query(func.sum(AILog.prompt_tokens + AILog.completion_tokens)).scalar() or 0
@@ -191,7 +199,10 @@ def admin_dashboard():
                                total_revenue=total_revenue,
                                total_stores=total_stores,
                                overdue_stores=overdue_stores,
-                               global_tokens=global_tokens)
+                               global_tokens=global_tokens,
+                               messages_today=0,
+                               total_orders=total_orders,
+                               admin_logs=[])
     finally:
         db.close()
 
