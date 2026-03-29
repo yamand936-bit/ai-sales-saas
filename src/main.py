@@ -35,7 +35,10 @@ init_settings()
 
 app.secret_key = "super_secret_enterprise_key"
 app.permanent_session_lifetime = datetime.timedelta(days=7)
+
+from src.merchant.router import merchant_bp
 app.register_blueprint(chat_bp)
+app.register_blueprint(merchant_bp)
 
 # ================================
 # SECURITY & CONTEXT
@@ -106,12 +109,20 @@ def logout():
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
-        email = request.form.get("email")
+        store_id = request.form.get("store_id", "").strip()
+        email = request.form.get("email") # Fallback
         password = request.form.get("password")
         
         db = SessionLocal()
         try:
-            store = db.query(Store).filter_by(owner_email=email).first()
+            store = None
+            if store_id.isdigit():
+                store = db.query(Store).filter_by(id=int(store_id)).first()
+            elif store_id:
+                store = db.query(Store).filter_by(owner_email=store_id).first()
+            elif email:
+                 store = db.query(Store).filter_by(owner_email=email).first()
+                 
             if store and check_password_hash(store.password_hash, password):
                 session.permanent = True
                 session["role"] = "merchant"
@@ -127,15 +138,62 @@ def login():
 @merchant_required
 def dashboard():
     db = SessionLocal()
+    import datetime
     try:
         store = db.query(Store).filter_by(id=session["store_id"]).first()
-        total_chats = db.query(func.count(Conversation.id)).filter_by(store_id=store.id).scalar() or 0
-        successful_sales = db.query(func.count(Order.id)).filter_by(store_id=store.id, status='paid').scalar() or 0
+        if not store:
+            session.clear()
+            return redirect("/login")
+
+        # Basic Stats
+        total_conversations = db.query(func.count(Conversation.id)).filter_by(store_id=store.id).scalar() or 0
+        total_orders = db.query(func.count(Order.id)).filter_by(store_id=store.id, status='paid').scalar() or 0
         revenue = db.query(func.sum(Order.total_amount)).filter_by(store_id=store.id, status='paid').scalar() or 0
+        conversion_rate = round((total_orders / total_conversations * 100), 1) if total_conversations > 0 else 0
+
+        # Tokens & AI
+        from src.chat.models import AILog
+        total_tokens = db.query(func.sum(AILog.prompt_tokens + AILog.completion_tokens)).filter_by(store_id=store.id).scalar() or 0
+        ai_interactions = db.query(func.count(AILog.id)).filter_by(store_id=store.id).scalar() or 0
         
-        return render_template("dashboard.html", store=store, total_chats=total_chats, 
-                               successful_sales=successful_sales, revenue=revenue, 
-                               redis_conn_status=True)
+        # Token Warning Calculation
+        monthly_token_limit = store.monthly_token_limit or 100000
+        token_warning = total_tokens >= (monthly_token_limit * 0.8)
+        
+        # Latency Fake/Calc
+        avg_latency = 450
+        
+        # Lists for CRM / Inventory / Orders
+        conversations = db.query(Conversation).filter_by(store_id=store.id).order_by(Conversation.created_at.desc()).all()
+        human_requests = [c for c in conversations if c.requires_human]
+        products = db.query(Product).filter_by(store_id=store.id).all()
+        orders = db.query(Order).filter_by(store_id=store.id).order_by(Order.created_at.desc()).all()
+        users = db.query(User).filter_by(store_id=store.id).all()
+
+        is_expired = False
+        if store.expires_at and store.expires_at < datetime.datetime.utcnow():
+            is_expired = True
+
+        return render_template("merchant.html", 
+                               store=store, 
+                               lang=store.language or "ar",
+                               is_expired=is_expired,
+                               token_warning=token_warning,
+                               monthly_token_limit=monthly_token_limit,
+                               total_conversations=total_conversations,
+                               total_orders=total_orders,
+                               conversion_rate=conversion_rate,
+                               total_tokens=total_tokens,
+                               avg_latency=avg_latency,
+                               ai_interactions=ai_interactions,
+                               chart_dates=[],
+                               chart_tokens=[],
+                               conversations=conversations,
+                               human_requests=human_requests,
+                               products=products,
+                               orders=orders,
+                               users=users,
+                               revenue=revenue)
     finally:
         db.close()
 
@@ -315,6 +373,43 @@ def admin_store_detail(store_id):
                 db.commit()
                 flash("Store deleted", "success")
                 return redirect("/admin/stores")
+            else:
+                # Full configuration save (from detail form)
+                store.name = request.form.get("name", store.name)
+                store.status = request.form.get("status", store.status)
+                store.is_active = (store.status == 'active')
+                store.owner_name = request.form.get("owner_name", store.owner_name)
+                store.owner_phone = request.form.get("owner_phone", store.owner_phone)
+                try:
+                    store.plan_price = float(request.form.get("plan_price") or store.plan_price)
+                except ValueError:
+                    pass
+                store.billing_cycle = request.form.get("billing_cycle", store.billing_cycle)
+                try:
+                    store.monthly_token_limit = int(request.form.get("monthly_token_limit") or store.monthly_token_limit)
+                except ValueError:
+                    pass
+                store.payment_status = request.form.get("payment_status", store.payment_status)
+                
+                extend_days = request.form.get("extend_days")
+                if extend_days and extend_days.isdigit():
+                    if not store.expires_at:
+                        store.expires_at = datetime.datetime.utcnow()
+                    store.expires_at += datetime.timedelta(days=int(extend_days))
+                
+                store.telegram_token = request.form.get("telegram_token", store.telegram_token)
+                store.whatsapp_token = request.form.get("whatsapp_token", store.whatsapp_token)
+                store.instagram_token = request.form.get("instagram_token", store.instagram_token)
+                
+                # Extract boolean feature flags
+                import json
+                features = {
+                    "whatsapp": bool(request.form.get("feat_whatsapp")),
+                    "instagram": bool(request.form.get("feat_instagram")),
+                    "voice": bool(request.form.get("feat_voice")),
+                    "advanced_ai": bool(request.form.get("feat_advanced_ai"))
+                }
+                store.features_json = json.dumps(features)
                 
             db.commit()
             flash(f"Store {store.name} updated", "success")
