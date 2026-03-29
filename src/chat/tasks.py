@@ -14,18 +14,15 @@ def check_store_limits(platform: str, token: str):
     from src.stores.models import Store
     from src.chat.models import AILog
     from sqlalchemy import func
-    import datetime
+    from datetime import datetime
     
     db = SessionLocal()
     try:
-        if platform == "telegram":
-            store = db.query(Store).filter_by(telegram_token=token).first()
-        elif platform == "whatsapp":
-            store = db.query(Store).filter_by(whatsapp_token=token).first()
-        elif platform == "instagram":
-            store = db.query(Store).filter_by(instagram_token=token).first()
-        else:
-            return False, "Unknown Platform"
+        store = None
+        for s in db.query(Store).filter(Store.status == 'active').all():
+            if platform == "telegram" and getattr(s, 'telegram_token', None) == token: store = s; break
+            elif platform == "whatsapp" and getattr(s, 'whatsapp_token', None) == token: store = s; break
+            elif platform == "instagram" and getattr(s, 'instagram_token', None) == token: store = s; break
 
         if not store: return False, "Store Not Found"
 
@@ -34,14 +31,14 @@ def check_store_limits(platform: str, token: str):
             return False, f"Store is {store.status}"
 
         # 2. Expiry Check
-        if store.next_billing_date and store.next_billing_date < datetime.datetime.utcnow():
+        if store.next_billing_date and store.next_billing_date < datetime.utcnow():
             store.status = 'expired'
             store.payment_status = 'overdue'
             db.commit()
             return False, "Store Subscription Expired"
 
         # 3. Quota Enforcement
-        current_month = datetime.datetime.utcnow().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        current_month = datetime.utcnow().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
         tokens_used = db.query(func.sum(AILog.prompt_tokens + AILog.completion_tokens))\
                         .filter(AILog.store_id == store.id, AILog.created_at >= current_month).scalar() or 0
                         
@@ -55,6 +52,7 @@ def check_store_limits(platform: str, token: str):
 
 @celery.task(name="process_telegram_task", bind=True, max_retries=3)
 def process_telegram_webhook(self, token: str, update: dict):
+    print("TASK START")
     try:
         _log_event("telegram", token, "Message Received")
         allowed, reason = check_store_limits("telegram", token)
@@ -86,6 +84,8 @@ def process_telegram_webhook(self, token: str, update: dict):
     except Exception as e:
         _log_event("telegram", token, "Error", str(e))
         self.retry(exc=e, countdown=5)
+    finally:
+        print("TASK END")
 
 @celery.task(name="process_whatsapp_task", bind=True, max_retries=3)
 def process_whatsapp_webhook(self, token: str, update: dict):

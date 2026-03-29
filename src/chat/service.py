@@ -13,7 +13,10 @@ from src.ai_engine.service import ai_engine
 logger = logging.getLogger(__name__)
 
 def send_telegram_msg(token, chat_id, text):
-    requests.post(f"https://api.telegram.org/bot{token}/sendMessage", json={"chat_id": str(chat_id), "text": text})
+    print("DEBUG: Sending message to Telegram", chat_id, text)
+    print("CHAT ID:", chat_id)
+    response = requests.post(f"https://api.telegram.org/bot{token}/sendMessage", json={"chat_id": str(chat_id), "text": text})
+    print("TELEGRAM RESPONSE:", response.status_code, response.text)
 
 class ChatProcessingService:
     def handle_telegram_update(self, token: str, update: dict):
@@ -57,7 +60,11 @@ class ChatProcessingService:
         
         db = SessionLocal()
         try:
-            store = db.query(Store).filter(Store.telegram_token == token).first()
+            store = None
+            for s in db.query(Store).filter(Store.status == 'active').all():
+                if getattr(s, 'telegram_token', None) == token:
+                    store = s
+                    break
             if not store: return
             if not store.is_active: return # Ignore messages if store disabled
             
@@ -274,7 +281,11 @@ class ChatProcessingService:
             if not text: return
             
             db = SessionLocal()
-            store = db.query(Store).filter(Store.whatsapp_token == token).first()
+            store = None
+            for s in db.query(Store).filter(Store.status == 'active').all():
+                if getattr(s, 'whatsapp_token', None) == token:
+                    store = s
+                    break
             if not store or not store.is_active: return
             from datetime import datetime
             if store.subscription_end_date and datetime.utcnow() > store.subscription_end_date: return
@@ -351,7 +362,11 @@ class ChatProcessingService:
                 return
                 
             db = SessionLocal()
-            store = db.query(Store).filter(Store.instagram_token == token).first()
+            store = None
+            for s in db.query(Store).filter(Store.status == 'active').all():
+                if getattr(s, 'instagram_token', None) == token:
+                    store = s
+                    break
             if not store or not store.is_active: return
             from datetime import datetime
             if store.subscription_end_date and datetime.utcnow() > store.subscription_end_date: return

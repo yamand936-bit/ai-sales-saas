@@ -34,15 +34,25 @@ def add_product(store_id):
         desc = request.form.get("description")
         image_url = request.form.get("image_url")
         category = request.form.get("category")
+        is_service = request.form.get("is_service") == "on"
+        booking_link = request.form.get("booking_link", "")
+        
+        type_val = request.form.get("type", "product")
+        duration = request.form.get("duration")
+        duration = int(duration) if duration else None
         
         product = Product(
             store_id=store_id, 
             name=name, 
             price=price, 
-            desc_ai=desc, 
+            description=desc, 
             image_url=image_url, 
             category=category, 
-            sizes="{}"
+            sizes="{}",
+            is_service=is_service,
+            booking_link=booking_link,
+            type=type_val,
+            duration=duration
         )
         db.add(product)
         db.commit()
@@ -102,7 +112,7 @@ def update_settings(store_id):
 @merchant_required
 def send_broadcast(store_id):
     if store_id != session.get("store_id"): return "Forbidden", 403
-    msg = request.form.get("message")
+    msg = request.json.get("message") if request.is_json else request.form.get("message")
     from src.chat.tasks import send_telegram_message
     db = SessionLocal()
     try:
@@ -138,11 +148,53 @@ def get_messages(store_id, user_id):
     if store_id != session.get("store_id"): return "Forbidden", 403
     db = SessionLocal()
     try:
-        conv = db.query(Conversation).filter_by(store_id=store_id, user_id=user_id).first()
+        user = db.query(User).filter_by(id=user_id, store_id=store_id).first()
+        if not user: return jsonify({"messages": []})
+        conv = db.query(Conversation).filter_by(user_id=user_id).first()
         if not conv:
             return jsonify({"messages": []})
-        msgs = db.query(Message).filter_by(conversation_id=conv.id).order_by(Message.created_at).all()
-        return jsonify({"messages": [{"role": m.role, "content": m.content, "time": m.created_at.strftime('%H:%M')} for m in msgs[-50:]]})
+        msgs = db.query(Message).filter_by(conversation_id=conv.id).order_by(Message.timestamp).all()
+        return jsonify({"messages": [{"role": m.role, "content": m.content, "time": m.timestamp.strftime('%H:%M')} for m in msgs[-50:]]})
+    finally:
+        db.close()
+
+@merchant_bp.route("/merchant/conversations", methods=["GET"])
+@merchant_required
+def merchant_conversations_endpoint():
+    print("API HIT: /merchant/conversations")
+    store_id = session.get("store_id")
+    if not store_id: return jsonify({"status": "error", "message": "unauthorized"}), 403
+    db = SessionLocal()
+    try:
+        users = db.query(User).filter_by(store_id=store_id).all()
+        user_ids = [u.id for u in users]
+        convs = db.query(Conversation).filter(Conversation.user_id.in_(user_ids)).all()
+        
+        data = []
+        for conv in convs:
+            msgs = db.query(Message).filter_by(conversation_id=conv.id).order_by(Message.timestamp).all()
+            data.append({
+                "id": conv.id,
+                "user_id": conv.user_id,
+                "messages": [{"id": m.id, "role": m.role, "content": m.content} for m in msgs]
+            })
+        result = {"status": "success", "data": data}
+        return jsonify(result)
+    finally:
+        db.close()
+
+@merchant_bp.route("/merchant/users", methods=["GET"])
+@merchant_required
+def merchant_users_endpoint():
+    print("API HIT: /merchant/users")
+    store_id = session.get("store_id")
+    if not store_id: return jsonify({"status": "error", "message": "unauthorized"}), 403
+    db = SessionLocal()
+    try:
+        users = db.query(User).filter_by(store_id=store_id).all()
+        data = [{"id": u.id, "name": u.first_name, "telegram_id": u.telegram_id} for u in users]
+        result = {"status": "success", "data": data}
+        return jsonify(result)
     finally:
         db.close()
 
@@ -152,7 +204,9 @@ def toggle_ai(store_id, user_id):
     if store_id != session.get("store_id"): return "Forbidden", 403
     db = SessionLocal()
     try:
-        conv = db.query(Conversation).filter_by(store_id=store_id, user_id=user_id).first()
+        user = db.query(User).filter_by(id=user_id, store_id=store_id).first()
+        if not user: return redirect("/dashboard")
+        conv = db.query(Conversation).filter_by(user_id=user_id).first()
         if conv:
             conv.requires_human = not conv.requires_human
             db.commit()
@@ -165,7 +219,7 @@ def toggle_ai(store_id, user_id):
 def merchant_reply(store_id, telegram_id):
     if store_id != session.get("store_id"): return "Forbidden", 403
     db = SessionLocal()
-    from src.chat.tasks import send_telegram_message
+    from src.chat.service import send_telegram_msg
     try:
         store = db.query(Store).filter_by(id=store_id).first()
         user = db.query(User).filter_by(telegram_id=telegram_id, store_id=store_id).first()
@@ -175,10 +229,10 @@ def merchant_reply(store_id, telegram_id):
         action_val = request.form.get("action_val")
         reply_msg = request.form.get("reply_msg")
         
-        conv = db.query(Conversation).filter_by(store_id=store.id, user_id=user.id).first()
+        conv = db.query(Conversation).filter_by(user_id=user.id).first()
         
         if reply_msg:
-            send_telegram_message.delay(store.telegram_token, int(telegram_id), reply_msg)
+            send_telegram_msg(store.telegram_token, telegram_id, reply_msg)
             if conv:
                 new_msg = Message(conversation_id=conv.id, role="assistant", content=reply_msg)
                 db.add(new_msg)

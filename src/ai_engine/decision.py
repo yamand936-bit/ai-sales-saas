@@ -49,14 +49,13 @@ class DecisionEngine:
         db = SessionLocal()
         try:
             # Platform-agnostic unified auth
-            if platform == "telegram":
-                store = db.query(Store).filter(Store.telegram_token == token).first()
-            elif platform == "whatsapp":
-                store = db.query(Store).filter(Store.whatsapp_token == token).first()
-            elif platform == "instagram":
-                store = db.query(Store).filter(Store.instagram_token == token).first()
-            else:
-                return None
+            store = None
+            for s in db.query(Store).filter(Store.status == 'active').all():
+                if platform == "telegram" and getattr(s, 'telegram_token', None) == token: store = s; break
+                elif platform == "whatsapp" and getattr(s, 'whatsapp_token', None) == token: store = s; break
+                elif platform == "instagram" and getattr(s, 'instagram_token', None) == token: store = s; break
+                
+            if not store: return None
                 
             if not store or not store.is_active: return None
             
@@ -104,13 +103,17 @@ class DecisionEngine:
                 "first_name": user.first_name,
                 "role": "user",
                 "content": text,
-                "created_at": datetime.datetime.utcnow().strftime('%H:%M')
+                "created_at": datetime.utcnow().strftime('%H:%M')
             })
             
             history = db.query(Message).filter(Message.conversation_id == conversation.id).order_by(Message.id.asc()).all()
             context = [{"role": h.role, "content": h.content} for h in history[:-1][-10:]]
 
             # Generate JSON Output Setup (Prompt Layering Engine)
+            if hasattr(store, 'ai_enabled') and not store.ai_enabled:
+                logger.info(f"Store {store.id} AI Disabled. Message captured natively. AI Response Bypassed.")
+                return None
+                
             full_system_prompt = self._build_system_prompt(store, user, text)
             
             # --- ENFORCE DYNAMIC MONETIZATION SYSTEM ---
@@ -166,6 +169,7 @@ class DecisionEngine:
 
             # Business Logic Execution Layer (The true decoupling)
             final_reply_text = self._execute_action(db, safe_output, store, user, conversation)
+            print("AI RESPONSE:", final_reply_text)
             
             # Document AI Msg
             ai_msg = Message(conversation_id=conversation.id, role="assistant", content=final_reply_text)
@@ -180,7 +184,7 @@ class DecisionEngine:
                 "role": "assistant",
                 "content": final_reply_text,
                 "intent": safe_output.get("intent", "none"),
-                "created_at": datetime.datetime.utcnow().strftime('%H:%M')
+                "created_at": datetime.utcnow().strftime('%H:%M')
             })
             
             return final_reply_text

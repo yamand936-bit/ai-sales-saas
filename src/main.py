@@ -72,7 +72,7 @@ def security_middleware():
 def admin_required(f):
     @wraps(f)
     def wrapper(*args, **kwargs):
-        if session.get("role") != "admin":
+        if not session.get("is_admin"):
             return redirect("/admin/login")
         return f(*args, **kwargs)
     return wrapper
@@ -148,8 +148,9 @@ def dashboard():
         # Basic Stats
         total_conversations = db.query(Conversation).join(User).filter(User.store_id == store.id).count()
         total_orders = db.query(Order).filter_by(store_id=store.id, status='paid').count()
+        total_users = db.query(User).filter_by(store_id=store.id).count()
         revenue = db.query(func.sum(Order.total_amount)).filter(Order.store_id == store.id, Order.status == 'paid').scalar() or 0
-        conversion_rate = round((total_orders / total_conversations * 100), 1) if total_conversations > 0 else 0
+        conversion_rate = round((total_orders / total_users * 100), 1) if total_users > 0 else 0
 
         # Tokens & AI
         from src.chat.models import AILog
@@ -242,6 +243,7 @@ def admin_login():
         if password == "superadmin123":  # Ideally moved to env vars
             session.permanent = True
             session["role"] = "admin"
+            session["is_admin"] = True
             session["lang"] = "ar"
             return redirect("/admin/dashboard")
         flash("Invalid Admin PIN", "error")
@@ -305,6 +307,13 @@ def admin_dashboard():
     finally:
         db.close()
 
+@app.route("/admin/store/<int:store_id>/login_as")
+@admin_required
+def admin_login_as(store_id):
+    session["role"] = "merchant"
+    session["store_id"] = store_id
+    return redirect("/dashboard")
+
 @app.route("/admin/stores", methods=["GET", "POST"])
 @admin_required
 def admin_stores():
@@ -329,7 +338,7 @@ def admin_stores():
             return redirect("/admin/stores")
             
         stores = db.query(Store).all()
-        return render_template("admin_stores.html", stores=stores)
+        return render_template("admin_stores.html", stores=stores, now=datetime.datetime.utcnow())
     finally:
         db.close()
 
@@ -381,8 +390,12 @@ def admin_store_detail(store_id):
                 store.status = "active"
                 store.is_active = True
             elif action == "quick_extend":
-                if store.expires_at:
-                    store.expires_at += datetime.timedelta(days=30)
+                if not store.expires_at:
+                    from datetime import datetime
+                    store.expires_at = datetime.utcnow()
+                
+                from datetime import timedelta
+                store.expires_at += timedelta(days=30)
             elif action == "delete":
                 db.delete(store)
                 db.commit()
@@ -478,6 +491,90 @@ def admin_store_detail(store_id):
                                order_count=order_count,
                                tokens_used=tokens_used,
                                features_dict=features_dict)
+    finally:
+        db.close()
+
+@app.route("/admin/messages-order", methods=["GET"])
+@admin_required
+def admin_messages_order():
+    print("API HIT: /admin/messages-order")
+    db = SessionLocal()
+    try:
+        from src.chat.models import Message
+        msgs = db.query(Message).order_by(Message.timestamp.desc()).limit(10).all()
+        data = [{"id": m.id, "role": m.role, "content": m.content} for m in msgs]
+        result = {"status": "success", "data": data}
+        print("DB RESULT:", result)
+        return jsonify(result)
+    finally:
+        db.close()
+
+@app.route("/admin/global-token", methods=["GET"])
+@admin_required
+def admin_global_token():
+    print("API HIT: /admin/global-token")
+    db = SessionLocal()
+    try:
+        stores = db.query(Store).all()
+        data = [{"store_id": s.id, "telegram_token": s.telegram_token} for s in stores]
+        result = {"status": "success", "data": data}
+        print("DB RESULT:", result)
+        return jsonify(result)
+    finally:
+        db.close()
+
+@app.route("/admin/global-live-feed", methods=["GET"])
+@admin_required
+def admin_global_live_feed():
+    print("API HIT: /admin/global-live-feed")
+    db = SessionLocal()
+    try:
+        from src.chat.models import Conversation
+        convs = db.query(Conversation).order_by(Conversation.created_at.desc()).limit(10).all()
+        data = [{"id": c.id, "user_id": c.user_id, "requires_human": c.requires_human} for c in convs]
+        result = {"status": "success", "data": data}
+        print("DB RESULT:", result)
+        return jsonify(result)
+    finally:
+        db.close()
+
+@app.route("/admin/global-ai-usage", methods=["GET"])
+@admin_required
+def admin_global_ai_usage():
+    print("API HIT: /admin/global-ai-usage")
+    db = SessionLocal()
+    try:
+        from src.chat.models import AILog
+        logs = db.query(AILog).order_by(AILog.created_at.desc()).limit(10).all()
+        data = [{"store_id": l.store_id, "prompt_tokens": l.prompt_tokens} for l in logs]
+        result = {"status": "success", "data": data}
+        print("DB RESULT:", result)
+        return jsonify(result)
+    finally:
+        db.close()
+
+@app.route("/admin/audit-logs-header", methods=["GET"])
+@admin_required
+def admin_audit_logs_header():
+    print("API HIT: /admin/audit-logs-header")
+    result = {"status": "success", "data": [{"log": "Active"}]}
+    print("DB RESULT:", result)
+    return jsonify(result)
+
+@app.route("/admin/subscription-days/<int:store_id>", methods=["GET"])
+@admin_required
+def admin_subscription_days(store_id):
+    print(f"API HIT: /admin/subscription-days/{store_id}")
+    db = SessionLocal()
+    try:
+        store = db.query(Store).filter_by(id=store_id).first()
+        days_left = 0
+        if store and getattr(store, 'next_billing_date', None):
+            days_left = max((store.next_billing_date - datetime.datetime.utcnow()).days, 0)
+        
+        result = {"days_left": days_left}
+        print("DB RESULT:", result)
+        return jsonify(result)
     finally:
         db.close()
 

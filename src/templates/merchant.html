@@ -81,6 +81,15 @@
             </div>
             
             <div class="flex items-center gap-2">
+                <form action="/merchant/{{ store.id }}/toggle_system_ai" method="POST" class="m-0">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    {% if store.ai_enabled %}
+                        <button type="submit" class="text-[10px] font-bold px-3 py-1.5 rounded border bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100 transition whitespace-nowrap">🤖 Disable AI</button>
+                    {% else %}
+                        <button type="submit" class="text-[10px] font-bold px-3 py-1.5 rounded border bg-slate-50 text-slate-500 border-slate-200 hover:bg-slate-100 transition whitespace-nowrap">❌ Enable AI</button>
+                    {% endif %}
+                </form>
+                <div class="h-6 border-r border-slate-200 mx-1"></div>
                 <a href="/set_lang/ar" class="text-xs font-bold px-3 py-1.5 rounded-lg border {% if lang == 'ar' %}bg-primary text-white border-primary{% else %}bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-200{% endif %} transition">عربي</a>
                 <a href="/set_lang/en" class="text-xs font-bold px-3 py-1.5 rounded-lg border {% if lang == 'en' %}bg-primary text-white border-primary{% else %}bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-200{% endif %} transition">EN</a>
                 <a href="/set_lang/tr" class="text-xs font-bold px-3 py-1.5 rounded-lg border {% if lang == 'tr' %}bg-primary text-white border-primary{% else %}bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-200{% endif %} transition">TR</a>
@@ -253,14 +262,19 @@
             <!-- ====== TAB: PRODUCTS ====== -->
             <section id="tab-products" class="tab-pane absolute inset-0 hidden overflow-y-auto p-8 bg-slate-50">
                 <div class="flex justify-between items-center mb-8">
+                <div class="flex justify-between items-center mb-8 gap-4">
                     <h2 class="text-2xl font-black text-slate-800">{{ _('inventory_pricing_mgmt') }}</h2>
-                    <button class="bg-primary text-white font-bold px-6 py-2 rounded-lg shadow-sm hover:bg-indigo-700 transition" onclick="document.getElementById('addProductForm').classList.toggle('hidden')">{{ _('add_new_product_btn') }}</button>
+                    <div class="flex gap-2">
+                        <button class="bg-primary hover:bg-indigo-700 text-white font-bold px-4 py-2 rounded-lg shadow-sm transition whitespace-nowrap text-sm" onclick="openAddModal('product')">➕ {{ _('add_new_product_btn') }}</button>
+                        <button class="bg-purple-600 hover:bg-purple-700 text-white font-bold px-4 py-2 rounded-lg shadow-sm transition whitespace-nowrap text-sm" onclick="openAddModal('service')">➕ إرساء خدمة</button>
+                    </div>
                 </div>
                 
                 <!-- Add Product Form (Hidden by default) -->
                 <div id="addProductForm" class="hidden bg-white rounded-2xl p-6 shadow-sm border border-slate-200 mb-8">
                     <form action="/merchant/{{ store.id }}/add_product" method="POST" class="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="type" id="productTypeInput" value="product">
                         <div>
                             <label class="block text-xs font-bold text-slate-500 mb-1">{{ _('product_name') }}</label>
                             <input type="text" name="name" class="w-full border rounded-lg p-3 outline-none focus:border-primary text-sm" required>
@@ -279,8 +293,54 @@
                             <label class="block text-xs font-bold text-slate-500 mb-1 mt-3">{{ _('category_lbl') }}</label>
                             <input type="text" name="category" class="w-full border rounded-lg p-3 outline-none focus:border-primary text-sm" required>
                         </div>
-                        <div class="col-span-1 md:col-span-2 flex justify-end">
+                        <div class="col-span-1 md:col-span-2 border-t border-slate-100 pt-4 mt-2">
+                            <div class="flex items-center gap-4 mb-4">
+                                <label class="flex items-center gap-2 cursor-pointer">
+                                    <input type="checkbox" name="is_service" id="isServiceToggle" class="hidden peer" onchange="document.getElementById('bookingLinkContainer').classList.toggle('hidden', !this.checked)">
+                                    <div class="w-10 h-6 bg-slate-200 rounded-full peer-checked:bg-purple-600 relative transition">
+                                        <div class="w-4 h-4 bg-white rounded-full absolute left-1 top-1 peer-checked:translate-x-4 transition"></div>
+                                    </div>
+                                    <span class="text-sm font-bold text-slate-700">هذه خدمة وليست منتجاً ملموساً (للعيادات وغيرها)</span>
+                                </label>
+                            </div>
+                            <div id="bookingLinkContainer" class="hidden mb-4">
+                                <label class="block text-xs font-bold text-slate-500 mb-1">رابط الحجز الخارجي (اختياري)</label>
+                                <input type="url" name="booking_link" placeholder="https://calendly.com/..." class="w-full border rounded-lg p-3 outline-none focus:border-primary text-sm dir-ltr text-left">
+                            </div>
+                            <div id="durationContainer" class="hidden mb-4">
+                                <label class="block text-xs font-bold text-slate-500 mb-1">عمر الجلسة/الخدمة (اختياري بالدقائق)</label>
+                                <input type="number" name="duration" placeholder="e.g. 45" class="w-full border rounded-lg p-3 outline-none focus:border-primary text-sm dir-ltr text-left">
+                            </div>
+                        </div>
+                        <div class="col-span-1 md:col-span-2 flex justify-end gap-3">
+                            <button type="button" class="bg-slate-100 text-slate-600 font-bold px-6 py-3 rounded-xl hover:bg-slate-200 transition" onclick="document.getElementById('addProductForm').classList.add('hidden')">إلغاء</button>
                             <button type="submit" class="bg-green-600 text-white font-black px-8 py-3 rounded-xl shadow-md">{{ _('save') }} {{ _('in_inventory') }}</button>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- Edit Product Form (Hidden by default) -->
+                <div id="editProductFormContainer" class="hidden bg-white rounded-2xl p-6 shadow-sm border border-slate-200 mb-8 border-t-4 border-t-yellow-400">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-lg font-black text-slate-800">تعديل العنصر</h3>
+                    </div>
+                    <form id="editProductForm" method="POST" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <div>
+                            <label class="block text-xs font-bold text-slate-500 mb-1">{{ _('product_name') }}</label>
+                            <input type="text" name="name" id="editProductName" class="w-full border rounded-lg p-3 outline-none focus:border-primary text-sm" required>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-slate-500 mb-1">السعر ({{ store.currency }})</label>
+                            <input type="number" step="0.01" name="price" id="editProductPrice" class="w-full border rounded-lg p-3 outline-none focus:border-primary text-sm dir-ltr text-left" required>
+                        </div>
+                        <div class="col-span-1 md:col-span-2">
+                            <label class="block text-xs font-bold text-slate-500 mb-1">{{ _('ai_directed_desc') }}</label>
+                            <textarea name="description" id="editProductDesc" class="w-full border rounded-lg p-3 outline-none focus:border-primary text-sm" rows="3" required></textarea>
+                        </div>
+                        <div class="col-span-1 md:col-span-2 flex justify-end gap-3">
+                            <button type="button" class="bg-slate-100 text-slate-600 font-bold px-6 py-3 rounded-xl hover:bg-slate-200 transition" onclick="document.getElementById('editProductFormContainer').classList.add('hidden')">إلغاء</button>
+                            <button type="submit" class="bg-yellow-500 text-white font-black px-8 py-3 rounded-xl shadow-md">حفظ التعديلات</button>
                         </div>
                     </form>
                 </div>
@@ -296,10 +356,18 @@
                         {% endif %}
                         <div class="p-5">
                             <div class="flex justify-between items-start mb-2">
-                                <h3 class="font-black text-slate-800 line-clamp-1">{{ p.name }}</h3>
+                                <h3 class="font-black text-slate-800 line-clamp-1">
+                                    {{ p.name }}
+                                    {% if p.is_service %}
+                                    <span class="inline-block bg-purple-100 text-purple-700 text-[10px] px-2 py-0.5 rounded-full mr-2">خدمة</span>
+                                    {% endif %}
+                                </h3>
                                 <span class="bg-slate-100 text-slate-600 px-2 py-0.5 rounded text-xs font-bold">{{ p.category }}</span>
                             </div>
                             <p class="text-primary font-black mb-3 text-lg">{{ p.price }} {{ store.currency }}</p>
+                            {% if p.booking_link %}
+                            <a href="{{ p.booking_link }}" target="_blank" class="block w-full text-center text-xs font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 py-2 rounded-lg mb-3 transition">رابط الحجز الخارجي 🔗</a>
+                            {% endif %}
                             
                             <!-- Inline AJAX Sizes Editor (Phase 7 Request) -->
                             <div class="mb-4">
@@ -327,6 +395,7 @@
                                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                     <button type="submit" class="text-xs text-slate-400 hover:text-red-500 font-bold px-2">🗑️ حذف</button>
                                 </form>
+                                <button type="button" class="text-xs text-slate-400 hover:text-yellow-500 font-bold px-2" onclick="openEditModal({{ p.id }}, '{{ p.name | replace('\'', '\\\'') }}', {{ p.price }}, '{{ p.description | replace('\'', '\\\'') | replace('\n', '\\n') }}')">✏️ تعديل</button>
                             </div>
                         </div>
                     </div>
@@ -562,6 +631,36 @@
             // Setup AI Toggle Button
             const aiBtn = document.getElementById('aiToggleBtn');
             const toggleForm = document.getElementById('aiToggleForm');
+
+        function openAddModal(type) {
+            document.getElementById('addProductForm').classList.remove('hidden');
+            document.getElementById('editProductFormContainer').classList.add('hidden');
+            document.getElementById('productTypeInput').value = type;
+            
+            if (type === 'service') {
+                document.getElementById('durationContainer').classList.remove('hidden');
+            } else {
+                document.getElementById('durationContainer').classList.add('hidden');
+            }
+        }
+
+        function openEditModal(id, name, price, desc) {
+            document.getElementById('addProductForm').classList.add('hidden');
+            const container = document.getElementById('editProductFormContainer');
+            container.classList.remove('hidden');
+            
+            document.getElementById('editProductForm').action = '/merchant/product/' + id;
+            document.getElementById('editProductName').value = name;
+            document.getElementById('editProductPrice').value = price;
+            document.getElementById('editProductDesc').value = desc;
+            
+            container.scrollIntoView({ behavior: 'smooth' });
+        }
+            
+document.addEventListener("DOMContentLoaded", () => {
+
+            const aiBtn = document.getElementById('aiToggleBtn');
+            const toggleForm = document.getElementById('aiToggleForm');
             toggleForm.action = `/merchant/${storeId}/toggle_ai/${userId}`;
             
             if (requiresHuman) {
@@ -580,22 +679,33 @@
             
             try {
                 const res = await fetch(`/api/merchant/${storeId}/messages/${userId}?page=1`);
-                const data = await res.json();
+                const responsePayload = await res.json();
+                
+                // Fix API RESPONSE HANDLING: handle standard payload or wrapped {data: [...]} 
+                let msgArray = responsePayload?.data?.messages || responsePayload?.messages || responsePayload?.data || [];
+                if (!Array.isArray(msgArray)) msgArray = [];
+                
                 canvas.innerHTML = '';
                 
-                data.messages.forEach(msg => {
-                    const isAi = msg.role === 'assistant';
+                // Add NULL SAFETY (optional chaining map/forEach)
+                msgArray?.forEach(msg => {
+                    const isAi = msg?.role === 'assistant';
+                    const content = msg?.content || '';
                     const bubble = document.createElement('div');
                     bubble.className = `max-w-[80%] p-4 rounded-xl text-sm shadow-sm relative ${
                         isAi ? 'bg-white border border-slate-100 self-start rounded-tr-none text-slate-800' 
                              : 'bg-primary text-white self-end rounded-tl-none'
                     }`;
                     bubble.innerHTML = `
-                        <p class="leading-relaxed whitespace-pre-wrap">${msg.content}</p>
-                        <span class="text-[10px] absolute -bottom-4 right-1 opacity-50 text-slate-500">${msg.time}</span>
+                        <p class="leading-relaxed whitespace-pre-wrap">${content}</p>
+                        <span class="text-[10px] absolute -bottom-4 right-1 opacity-50 text-slate-500">${msg?.time || 'now'}</span>
                     `;
                     canvas.appendChild(bubble);
                 });
+                
+                if(msgArray.length === 0) {
+                     canvas.innerHTML = '<div class="text-center text-slate-400 mt-10">لا توجد رسائل سابقة.</div>';
+                }
                 
                 // Scroll to bottom natively
                 canvas.scrollTop = canvas.scrollHeight;

@@ -79,13 +79,13 @@ class AIEngineService:
             ai_status = db.query(SystemSetting).filter_by(key="ai_enabled").first()
             if ai_status and ai_status.value.lower() != "true":
                 logger.warning("AI generation skipped: Globally disabled in SystemSettings")
-                return '{"reply": "النظام معلق حالياً من قبل الإدارة للترقية.", "action": "none", "metadata": {}}'
+                return '{"reply": "النظام معلق حالياً من قبل الإدارة للترقية.", "intent": "none", "entities": {}}'
         finally:
             db.close()
             
         if not self.is_configured():
             logger.warning("OpenAI not configured.")
-            return '{"reply": "عذراً، نظام الذكاء الاصطناعي قيد الصيانة.", "action": "none", "metadata": {}}'
+            return '{"reply": "عذراً، نظام الذكاء الاصطناعي قيد الصيانة (يرجى إضافة مفتاح OpenAI).", "intent": "none", "entities": {}}'
 
         messages = [{"role": "system", "content": system_prompt}]
         if context:
@@ -113,6 +113,6 @@ class AIEngineService:
             return response.choices[0].message.content
         except Exception as e:
             logger.error(f"AI JSON Gen Error: {e}")
-            return '{"reply": "حدث خطأ غير متوقع في الذكاء الاصطناعي.", "action": "none", "metadata": {}}'
+            return '{"reply": "حدث خطأ غير متوقع في الذكاء الاصطناعي.", "intent": "none", "entities": {}}'
 
 ai_engine = AIEngineService()

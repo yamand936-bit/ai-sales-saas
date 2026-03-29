@@ -230,7 +230,17 @@ translations = {
         "no_settings_yet": "لا توجد إعدادات بعد.",
         "numeric_limit_err": "يجب أن تكون قيم الحدود أرقاماً صحيحة فقط.",
         "settings_saved_success": "تم حفظ الإعدادات بنجاح",
-        "aggregated_tokens": "Tokens المجمعة"
+        "aggregated_tokens": "Tokens المجمعة",
+        "messages_orders_today": "الرسائل / الطلبات اليوم",
+        "global_ai_usage_30d": "استخدام الذكاء الاصطناعي (30 يوم)",
+        "audit_logs_header": "سجل عمليات الإدارة (Audit Logs)",
+        "global_token_usage": "إجمالي Token النظام",
+        "global_token": "إجمالي Token النظام",
+        "global_live_feed": "الآحداث المباشرة العالمية",
+        "global_ai_usage": "استخدام الذكاء العام",
+        "days_left": "المتبقي",
+        "days": "أيام",
+        "day": "يوم"
     },
     "en": {
         "dashboard_title": "Central SaaS Dashboard",
@@ -514,7 +524,17 @@ translations = {
         "no_settings_yet": "No settings available yet.",
         "numeric_limit_err": "Limit values must be numeric integers.",
         "settings_saved_success": "Settings saved successfully.",
-        "aggregated_tokens": "Aggregated Tokens"
+        "aggregated_tokens": "Aggregated Tokens",
+        "messages_orders_today": "Msgs / Orders Today",
+        "global_ai_usage_30d": "Total AI Usage (30d)",
+        "audit_logs_header": "Admin Audit Logs",
+        "global_token_usage": "Global Token Usage",
+        "global_token": "Global Token",
+        "global_live_feed": "Global Live Feed",
+        "global_ai_usage": "Global AI Usage",
+        "days_left": "Days Left",
+        "days": "Days",
+        "day": "Day"
     },
     "tr": {
         "dashboard_title": "SaaS Merkezi",

@@ -77,7 +77,14 @@
                             <td class="px-6 py-4 text-gray-300">{{ s.owner_name or _('undefined') }}<br><span class="text-xs text-gray-500">{{ s.owner_phone }}</span></td>
                             <td class="px-6 py-4 font-mono text-blue-400">${{ s.plan_price }}/{{ 'mo' if s.billing_cycle == 'monthly' else 'yr' }}</td>
                             <td class="px-6 py-4 text-gray-400">
-                                {{ s.next_billing_date.strftime('%Y-%m-%d') if s.next_billing_date else _('undefined') }}
+                                {% if s.expires_at %}
+                                    {{ s.expires_at.strftime('%Y-%m-%d') }}<br>
+                                    <span class="text-xs font-bold {% if (s.expires_at - now).days < 0 %}text-red-500{% elif (s.expires_at - now).days < 7 %}text-orange-500{% else %}text-green-500{% endif %}">
+                                        {{ _('days_left') }}: {{ (s.expires_at - now).days }} {{ _('days') }}
+                                    </span>
+                                {% else %}
+                                    {{ _('undefined') }}
+                                {% endif %}
                                 {% if s.payment_status == 'overdue' %}
                                     <span class="bg-red-900/50 text-red-400 text-[10px] px-2 py-0.5 rounded-full mr-2">{{ _('overdue_small') }}</span>
                                 {% endif %}
