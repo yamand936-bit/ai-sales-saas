@@ -181,18 +181,35 @@ def admin_root():
 @admin_required
 def admin_dashboard():
     db = SessionLocal()
+    from sqlalchemy.exc import SQLAlchemyError
     try:
-        active_stores = db.query(func.count(Store.id)).filter_by(status='active').scalar() or 0
-        total_revenue = db.query(func.sum(Store.plan_price)).scalar() or 0
-        total_stores = db.query(func.count(Store.id)).scalar() or 0
-        overdue_stores = db.query(func.count(Store.id)).filter_by(payment_status='overdue').scalar() or 0
-        
-        # Safe globals
-        total_orders = db.query(func.count(Order.id)).scalar() or 0
-        
-        # Local import to prevent circular dependency
-        from src.chat.models import AILog
-        global_tokens = db.query(func.sum(AILog.prompt_tokens + AILog.completion_tokens)).scalar() or 0
+        active_stores = 0
+        total_revenue = 0
+        total_stores = 0
+        overdue_stores = 0
+        total_orders = 0
+        global_tokens = 0
+        messages_today = 0
+        admin_logs = []
+
+        try:
+            active_stores = db.query(func.count(Store.id)).filter_by(status='active').scalar() or 0
+            total_revenue = db.query(func.sum(Store.plan_price)).scalar() or 0
+            total_stores = db.query(func.count(Store.id)).scalar() or 0
+            overdue_stores = db.query(func.count(Store.id)).filter_by(payment_status='overdue').scalar() or 0
+        except SQLAlchemyError:
+            db.rollback()
+
+        try:
+            total_orders = db.query(func.count(Order.id)).scalar() or 0
+        except SQLAlchemyError:
+            db.rollback()
+
+        try:
+            from src.chat.models import AILog
+            global_tokens = db.query(func.sum(AILog.prompt_tokens + AILog.completion_tokens)).scalar() or 0
+        except SQLAlchemyError:
+            db.rollback()
 
         # Optional Chart rendering variables required by Jinja `tojson`
         chart_dates = []
@@ -204,9 +221,9 @@ def admin_dashboard():
                                total_stores=total_stores,
                                overdue_stores=overdue_stores,
                                global_tokens=global_tokens,
-                               messages_today=0,
+                               messages_today=messages_today,
                                total_orders=total_orders,
-                               admin_logs=[],
+                               admin_logs=admin_logs,
                                chart_dates=chart_dates,
                                chart_tokens=chart_tokens)
     finally:
