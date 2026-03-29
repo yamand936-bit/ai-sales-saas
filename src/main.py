@@ -194,6 +194,10 @@ def admin_dashboard():
         from src.chat.models import AILog
         global_tokens = db.query(func.sum(AILog.prompt_tokens + AILog.completion_tokens)).scalar() or 0
 
+        # Optional Chart rendering variables required by Jinja `tojson`
+        chart_dates = []
+        chart_tokens = []
+
         return render_template("admin_dashboard.html", 
                                active_stores=active_stores, 
                                total_revenue=total_revenue,
@@ -202,7 +206,9 @@ def admin_dashboard():
                                global_tokens=global_tokens,
                                messages_today=0,
                                total_orders=total_orders,
-                               admin_logs=[])
+                               admin_logs=[],
+                               chart_dates=chart_dates,
+                               chart_tokens=chart_tokens)
     finally:
         db.close()
 
