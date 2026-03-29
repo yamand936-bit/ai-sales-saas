@@ -153,8 +153,15 @@ def dashboard():
 
         # Tokens & AI
         from src.chat.models import AILog
-        total_tokens = db.query(func.sum(AILog.prompt_tokens + AILog.completion_tokens)).filter_by(store_id=store.id).scalar() or 0
-        ai_interactions = db.query(func.count(AILog.id)).filter_by(store_id=store.id).scalar() or 0
+        from sqlalchemy.exc import SQLAlchemyError
+        
+        try:
+            total_tokens = db.query(func.sum(AILog.prompt_tokens + AILog.completion_tokens)).filter_by(store_id=store.id).scalar() or 0
+            ai_interactions = db.query(func.count(AILog.id)).filter_by(store_id=store.id).scalar() or 0
+        except SQLAlchemyError:
+            db.rollback()
+            total_tokens = 0
+            ai_interactions = 0
         
         # Token Warning Calculation
         monthly_token_limit = store.monthly_token_limit or 100000
@@ -164,10 +171,17 @@ def dashboard():
         avg_latency = 450
         
         # Lists for CRM / Inventory / Orders
-        conversations = db.query(Conversation).filter_by(store_id=store.id).order_by(Conversation.created_at.desc()).all()
-        human_requests = [c for c in conversations if c.requires_human]
-        products = db.query(Product).filter_by(store_id=store.id).all()
-        orders = db.query(Order).filter_by(store_id=store.id).order_by(Order.created_at.desc()).all()
+        try:
+            conversations = db.query(Conversation).filter_by(store_id=store.id).order_by(Conversation.created_at.desc()).all()
+            human_requests = [c for c in conversations if c.requires_human]
+            products = db.query(Product).filter_by(store_id=store.id).all()
+            orders = db.query(Order).filter_by(store_id=store.id).order_by(Order.created_at.desc()).all()
+        except SQLAlchemyError:
+            db.rollback()
+            conversations = []
+            human_requests = []
+            products = []
+            orders = []
         users = db.query(User).filter_by(store_id=store.id).all()
 
         is_expired = False
@@ -397,7 +411,20 @@ def admin_store_detail(store_id):
                         store.expires_at = datetime.datetime.utcnow()
                     store.expires_at += datetime.timedelta(days=int(extend_days))
                 
+                old_tg = store.telegram_token
                 store.telegram_token = request.form.get("telegram_token", store.telegram_token)
+                if store.telegram_token and store.telegram_token != old_tg:
+                    import requests
+                    webhook_url = f"https://{request.host}/webhooks/telegram/{store.telegram_token}"
+                    try:
+                        resp = requests.post(f"https://api.telegram.org/bot{store.telegram_token}/setWebhook", json={"url": webhook_url}, timeout=3)
+                        if resp.status_code == 200:
+                            flash("Telegram webhook activated successfully! 🤖", "success")
+                        else:
+                            flash("Telegram token saved, but webhook failed (Domain HTTPS required).", "error")
+                    except Exception:
+                        pass
+                
                 store.whatsapp_token = request.form.get("whatsapp_token", store.whatsapp_token)
                 store.instagram_token = request.form.get("instagram_token", store.instagram_token)
                 
