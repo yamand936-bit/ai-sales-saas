@@ -534,7 +534,7 @@
             if(!input.trim()) return;
             
             resBox.classList.remove('hidden');
-            resBox.innerHTML = '<span class="text-slate-400 font-bold animate-pulse">{{ _('processing_openai') }}</span>';
+            resBox.innerHTML = `<span class="text-slate-400 font-bold animate-pulse">{{ _('processing_openai') }}</span>`;
             
             const formData = new URLSearchParams();
             formData.append('prompt', input);
@@ -549,7 +549,7 @@
                     resBox.innerHTML = `<span class="text-red-400 font-bold">❌ خطأ: ${data.error}</span>`;
                 }
             } catch(e) {
-                resBox.innerHTML = '<span class="text-red-400 font-bold">❌ {{ _('failed_server_conn') }}</span>';
+                resBox.innerHTML = `<span class="text-red-400 font-bold">❌ {{ _('failed_server_conn') }}</span>`;
             }
         }
 
@@ -631,36 +631,6 @@
             // Setup AI Toggle Button
             const aiBtn = document.getElementById('aiToggleBtn');
             const toggleForm = document.getElementById('aiToggleForm');
-
-        function openAddModal(type) {
-            document.getElementById('addProductForm').classList.remove('hidden');
-            document.getElementById('editProductFormContainer').classList.add('hidden');
-            document.getElementById('productTypeInput').value = type;
-            
-            if (type === 'service') {
-                document.getElementById('durationContainer').classList.remove('hidden');
-            } else {
-                document.getElementById('durationContainer').classList.add('hidden');
-            }
-        }
-
-        function openEditModal(id, name, price, desc) {
-            document.getElementById('addProductForm').classList.add('hidden');
-            const container = document.getElementById('editProductFormContainer');
-            container.classList.remove('hidden');
-            
-            document.getElementById('editProductForm').action = '/merchant/product/' + id;
-            document.getElementById('editProductName').value = name;
-            document.getElementById('editProductPrice').value = price;
-            document.getElementById('editProductDesc').value = desc;
-            
-            container.scrollIntoView({ behavior: 'smooth' });
-        }
-            
-document.addEventListener("DOMContentLoaded", () => {
-
-            const aiBtn = document.getElementById('aiToggleBtn');
-            const toggleForm = document.getElementById('aiToggleForm');
             toggleForm.action = `/merchant/${storeId}/toggle_ai/${userId}`;
             
             if (requiresHuman) {
@@ -668,7 +638,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 aiBtn.className = "text-xs font-bold px-4 py-2 rounded-lg transition shadow-sm border bg-green-50 text-green-700 border-green-200 hover:bg-green-100";
                 aiBtn.innerText = "▶️ تفعيل AI";
             } else {
-                document.getElementById('activeChatStatus').innerHTML = '<span class="text-green-600">{{ _('ai_active_btn') }}</span>';
+                document.getElementById('activeChatStatus').innerHTML = '<span class="text-green-600">{{ _(\'ai_active_btn\') }}</span>';
                 aiBtn.className = "text-xs font-bold px-4 py-2 rounded-lg transition shadow-sm border bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100";
                 aiBtn.innerText = "⏸️ إيقاف AI مؤقتاً";
             }
@@ -712,6 +682,31 @@ document.addEventListener("DOMContentLoaded", () => {
             } catch(e) {
                 canvas.innerHTML = '<div class="text-center text-red-500">حدث خطأ في جلب الشبكة.</div>';
             }
+        }
+
+        function openAddModal(type) {
+            document.getElementById('addProductForm').classList.remove('hidden');
+            document.getElementById('editProductFormContainer').classList.add('hidden');
+            document.getElementById('productTypeInput').value = type;
+            
+            if (type === 'service') {
+                document.getElementById('durationContainer').classList.remove('hidden');
+            } else {
+                document.getElementById('durationContainer').classList.add('hidden');
+            }
+        }
+
+        function openEditModal(id, name, price, desc) {
+            document.getElementById('addProductForm').classList.add('hidden');
+            const container = document.getElementById('editProductFormContainer');
+            container.classList.remove('hidden');
+            
+            document.getElementById('editProductForm').action = '/merchant/product/' + id;
+            document.getElementById('editProductName').value = name;
+            document.getElementById('editProductPrice').value = price;
+            document.getElementById('editProductDesc').value = desc;
+            
+            container.scrollIntoView({ behavior: 'smooth' });
         }
 
         // Submit Reply form via AJAX
