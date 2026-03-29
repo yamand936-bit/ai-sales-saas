@@ -291,6 +291,7 @@ def admin_settings():
 @admin_required
 def admin_store_detail(store_id):
     db = SessionLocal()
+    from sqlalchemy.exc import SQLAlchemyError
     try:
         store = db.query(Store).filter_by(id=store_id).first()
         if not store:
@@ -299,13 +300,16 @@ def admin_store_detail(store_id):
             
         if request.method == "POST":
             # Update store status / admin overrides
-            action = request.form.get("action")
+            action = request.form.get("action_type") or request.form.get("action")
             if action == "suspend":
                 store.status = "suspended"
                 store.is_active = False
             elif action == "activate":
                 store.status = "active"
                 store.is_active = True
+            elif action == "quick_extend":
+                if store.expires_at:
+                    store.expires_at += datetime.timedelta(days=30)
             elif action == "delete":
                 db.delete(store)
                 db.commit()
@@ -316,7 +320,41 @@ def admin_store_detail(store_id):
             flash(f"Store {store.name} updated", "success")
             return redirect(f"/admin/store/{store_id}")
             
-        return render_template("admin_store_detail.html", store=store)
+        # Load Safe Metrics
+        conv_count = 0
+        order_count = 0
+        tokens_used = 0
+        features_dict = {}
+        
+        try:
+            conv_count = db.query(func.count(Conversation.id)).filter_by(store_id=store.id).scalar() or 0
+        except SQLAlchemyError:
+            db.rollback()
+            
+        try:
+            order_count = db.query(func.count(Order.id)).filter_by(store_id=store.id).scalar() or 0
+        except SQLAlchemyError:
+            db.rollback()
+            
+        try:
+            from src.chat.models import AILog
+            tokens_used = db.query(func.sum(AILog.prompt_tokens + AILog.completion_tokens)).filter_by(store_id=store.id).scalar() or 0
+        except SQLAlchemyError:
+            db.rollback()
+
+        import json
+        if getattr(store, 'features_json', None):
+            try:
+                features_dict = json.loads(store.features_json)
+            except:
+                pass
+
+        return render_template("admin_store_detail.html", 
+                               store=store,
+                               conv_count=conv_count,
+                               order_count=order_count,
+                               tokens_used=tokens_used,
+                               features_dict=features_dict)
     finally:
         db.close()
 
