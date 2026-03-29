@@ -146,7 +146,7 @@ def dashboard():
             return redirect("/login")
 
         # Basic Stats
-        total_conversations = db.query(Conversation).filter_by(store_id=store.id).count()
+        total_conversations = db.query(Conversation).join(User).filter(User.store_id == store.id).count()
         total_orders = db.query(Order).filter_by(store_id=store.id, status='paid').count()
         revenue = db.query(func.sum(Order.total_amount)).filter(Order.store_id == store.id, Order.status == 'paid').scalar() or 0
         conversion_rate = round((total_orders / total_conversations * 100), 1) if total_conversations > 0 else 0
@@ -172,7 +172,7 @@ def dashboard():
         
         # Lists for CRM / Inventory / Orders
         try:
-            conversations = db.query(Conversation).filter(Conversation.store_id == store.id).order_by(Conversation.created_at.desc()).all()
+            conversations = db.query(Conversation).join(User).filter(User.store_id == store.id).order_by(Conversation.created_at.desc()).all()
             human_requests = [c for c in conversations if c.requires_human]
             products = db.query(Product).filter(Product.store_id == store.id).all()
             orders = db.query(Order).filter(Order.store_id == store.id).order_by(Order.created_at.desc()).all()
@@ -452,7 +452,7 @@ def admin_store_detail(store_id):
         # Fetch actual statistics (safe loading)
         try:
             from sqlalchemy import func
-            conv_count = db.query(Conversation).filter_by(store_id=store_id).count()
+            conv_count = db.query(Conversation).join(User).filter(User.store_id == store_id).count()
             order_count = db.query(Order).filter_by(store_id=store_id, status='paid').count()
         except SQLAlchemyError:
             conv_count = 0
