@@ -2,7 +2,6 @@ from flask import Blueprint, request, jsonify, render_template, redirect, sessio
 from sqlalchemy import func
 import json
 import datetime
-from tenacity import retry, wait_fixed, stop_after_attempt
 
 from src.core.database import SessionLocal
 from src.stores.models import Store
