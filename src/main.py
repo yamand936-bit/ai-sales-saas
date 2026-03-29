@@ -179,7 +179,19 @@ def admin_dashboard():
     try:
         active_stores = db.query(func.count(Store.id)).filter_by(status='active').scalar() or 0
         total_revenue = db.query(func.sum(Store.plan_price)).scalar() or 0
-        return render_template("admin_dashboard.html", active_stores=active_stores, monthly_approx_revenue=total_revenue)
+        total_stores = db.query(func.count(Store.id)).scalar() or 0
+        overdue_stores = db.query(func.count(Store.id)).filter_by(payment_status='overdue').scalar() or 0
+        
+        # Local import to prevent circular dependency
+        from src.chat.models import AILog
+        global_tokens = db.query(func.sum(AILog.prompt_tokens + AILog.completion_tokens)).scalar() or 0
+
+        return render_template("admin_dashboard.html", 
+                               active_stores=active_stores, 
+                               total_revenue=total_revenue,
+                               total_stores=total_stores,
+                               overdue_stores=overdue_stores,
+                               global_tokens=global_tokens)
     finally:
         db.close()
 
@@ -237,6 +249,44 @@ def admin_settings():
         return render_template("admin_settings.html", settings=settings_list)
     finally:
         db.close()
+
+@app.route("/admin/store/<int:store_id>", methods=["GET", "POST"])
+@admin_required
+def admin_store_detail(store_id):
+    db = SessionLocal()
+    try:
+        store = db.query(Store).filter_by(id=store_id).first()
+        if not store:
+            flash("Store not found", "error")
+            return redirect("/admin/stores")
+            
+        if request.method == "POST":
+            # Update store status / admin overrides
+            action = request.form.get("action")
+            if action == "suspend":
+                store.status = "suspended"
+                store.is_active = False
+            elif action == "activate":
+                store.status = "active"
+                store.is_active = True
+            elif action == "delete":
+                db.delete(store)
+                db.commit()
+                flash("Store deleted", "success")
+                return redirect("/admin/stores")
+                
+            db.commit()
+            flash(f"Store {store.name} updated", "success")
+            return redirect(f"/admin/store/{store_id}")
+            
+        return render_template("admin_store_detail.html", store=store)
+    finally:
+        db.close()
+
+@app.route("/admin/live_feed")
+@admin_required
+def admin_live_feed():
+    return render_template("admin_live_feed.html")
 
 # ================================
 # CHECKOUT ROUTE
