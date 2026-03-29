@@ -172,10 +172,10 @@ def dashboard():
         
         # Lists for CRM / Inventory / Orders
         try:
-            conversations = db.query(Conversation).filter_by(store_id=store.id).order_by(Conversation.created_at.desc()).all()
+            conversations = db.query(Conversation).filter(Conversation.store_id == store.id).order_by(Conversation.created_at.desc()).all()
             human_requests = [c for c in conversations if c.requires_human]
-            products = db.query(Product).filter_by(store_id=store.id).all()
-            orders = db.query(Order).filter_by(store_id=store.id).order_by(Order.created_at.desc()).all()
+            products = db.query(Product).filter(Product.store_id == store.id).all()
+            orders = db.query(Order).filter(Order.store_id == store.id).order_by(Order.created_at.desc()).all()
         except SQLAlchemyError:
             db.rollback()
             conversations = []
