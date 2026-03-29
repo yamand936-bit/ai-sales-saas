@@ -50,7 +50,10 @@ app.jinja_env.globals['csrf_token'] = generate_csrf_token
 @app.context_processor
 def inject_i18n():
     language = session.get("lang", "ar")
-    return {"_": get_t(language), "lang": language}
+    t_dict = get_t(language)
+    def _translate(key):
+        return t_dict.get(key, key)
+    return {"_": _translate, "t": _translate, "lang": language}
 
 @app.before_request
 def security_middleware():
