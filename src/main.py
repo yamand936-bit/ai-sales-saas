@@ -146,9 +146,9 @@ def dashboard():
             return redirect("/login")
 
         # Basic Stats
-        total_conversations = db.query(func.count(Conversation.id)).filter_by(store_id=store.id).scalar() or 0
-        total_orders = db.query(func.count(Order.id)).filter_by(store_id=store.id, status='paid').scalar() or 0
-        revenue = db.query(func.sum(Order.total_amount)).filter_by(store_id=store.id, status='paid').scalar() or 0
+        total_conversations = db.query(Conversation).filter_by(store_id=store.id).count()
+        total_orders = db.query(Order).filter_by(store_id=store.id, status='paid').count()
+        revenue = db.query(func.sum(Order.total_amount)).filter(Order.store_id == store.id, Order.status == 'paid').scalar() or 0
         conversion_rate = round((total_orders / total_conversations * 100), 1) if total_conversations > 0 else 0
 
         # Tokens & AI
@@ -156,8 +156,8 @@ def dashboard():
         from sqlalchemy.exc import SQLAlchemyError
         
         try:
-            total_tokens = db.query(func.sum(AILog.prompt_tokens + AILog.completion_tokens)).filter_by(store_id=store.id).scalar() or 0
-            ai_interactions = db.query(func.count(AILog.id)).filter_by(store_id=store.id).scalar() or 0
+            total_tokens = db.query(func.sum(AILog.prompt_tokens + AILog.completion_tokens)).filter(AILog.store_id == store.id).scalar() or 0
+            ai_interactions = db.query(AILog).filter_by(store_id=store.id).count()
         except SQLAlchemyError:
             db.rollback()
             total_tokens = 0
@@ -448,19 +448,19 @@ def admin_store_detail(store_id):
         tokens_used = 0
         features_dict = {}
         
+        # Fetch actual statistics (safe loading)
         try:
-            conv_count = db.query(func.count(Conversation.id)).filter_by(store_id=store.id).scalar() or 0
+            from sqlalchemy import func
+            conv_count = db.query(Conversation).filter_by(store_id=store_id).count()
+            order_count = db.query(Order).filter_by(store_id=store_id, status='paid').count()
         except SQLAlchemyError:
-            db.rollback()
-            
-        try:
-            order_count = db.query(func.count(Order.id)).filter_by(store_id=store.id).scalar() or 0
-        except SQLAlchemyError:
+            conv_count = 0
+            order_count = 0
             db.rollback()
             
         try:
             from src.chat.models import AILog
-            tokens_used = db.query(func.sum(AILog.prompt_tokens + AILog.completion_tokens)).filter_by(store_id=store.id).scalar() or 0
+            tokens_used = db.query(func.sum(AILog.prompt_tokens + AILog.completion_tokens)).filter(AILog.store_id == store.id).scalar() or 0
         except SQLAlchemyError:
             db.rollback()
 
