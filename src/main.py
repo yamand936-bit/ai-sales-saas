@@ -267,11 +267,12 @@ def admin_dashboard():
         messages_today = 0
         admin_logs = []
 
+        # Quick Stats Layer 1
         try:
-            active_stores = db.query(func.count(Store.id)).filter_by(status='active').scalar() or 0
+            active_stores = db.query(Store).filter_by(status='active').count()
             total_revenue = db.query(func.sum(Store.plan_price)).scalar() or 0
             total_stores = db.query(func.count(Store.id)).scalar() or 0
-            overdue_stores = db.query(func.count(Store.id)).filter_by(payment_status='overdue').scalar() or 0
+            overdue_stores = db.query(Store).filter_by(payment_status='overdue').count()
         except SQLAlchemyError:
             db.rollback()
 
