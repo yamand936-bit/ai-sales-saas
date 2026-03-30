@@ -49,7 +49,7 @@
                 </div>
                 <div class="text-sm bg-gray-800 py-2 px-4 rounded-full border border-gray-700 flex items-center gap-2">
                     <div class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
-                    {{ _('system_status') }}
+                    {{ system_status | default('Operational') }}
                 </div>
             </div>
         </header>
@@ -70,38 +70,35 @@
             <!-- Global KPIs -->
             <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
                 <!-- Revenue -->
-                <div class="bg-gray-800 rounded-2xl p-6 border border-gray-700 shadow-xl relative overflow-hidden group">
+                <div class="bg-gray-800 rounded-2xl p-6 border border-gray-700 shadow-xl relative overflow-hidden group hover:-translate-y-1 transition duration-300">
                     <div class="absolute -right-6 -top-6 w-24 h-24 bg-green-500/10 rounded-full blur-2xl group-hover:scale-150 transition-transform duration-500"></div>
-                    <p class="text-gray-400 text-sm font-bold mb-1">{{ _('monthly_approx_revenue') }}</p>
+                    <p class="text-gray-400 text-sm font-bold mb-1">Total Revenue</p>
                     <div class="text-4xl font-black text-white flex items-baseline gap-1">
                         {{ "{:,.0f}".format(total_revenue) }} <span class="text-lg font-bold text-green-400">{{ _('usd') }}</span>
                     </div>
                 </div>
                 <!-- Global Tokens -->
-                <div class="bg-gray-800 rounded-2xl p-6 border border-gray-700 shadow-xl relative overflow-hidden group">
+                <div class="bg-gray-800 rounded-2xl p-6 border border-gray-700 shadow-xl relative overflow-hidden group hover:-translate-y-1 transition duration-300">
                     <div class="absolute -right-6 -top-6 w-24 h-24 bg-purple-500/10 rounded-full blur-2xl group-hover:scale-150 transition-transform duration-500"></div>
                     <p class="text-gray-400 text-sm font-bold mb-1">{{ _('global_token_usage') }}</p>
                     <div class="text-4xl font-black text-white flex items-baseline gap-1">
                         {{ "{:,.0f}".format(global_tokens) }} <span class="text-sm font-bold text-purple-400">{{ _('tokens_lbl') }}</span>
                     </div>
                 </div>
-                <!-- Network Stats -->
-                <div class="bg-gray-800 rounded-2xl p-6 border border-gray-700 shadow-xl relative overflow-hidden group col-span-2">
+                <!-- Active Stores -->
+                <div class="bg-gray-800 rounded-2xl p-6 border border-gray-700 shadow-xl relative overflow-hidden group hover:-translate-y-1 transition duration-300">
                     <div class="absolute -right-6 -top-6 w-24 h-24 bg-blue-500/10 rounded-full blur-2xl group-hover:scale-150 transition-transform duration-500"></div>
-                    <div class="flex justify-between items-center h-full">
-                        <div>
-                            <p class="text-gray-400 text-sm font-bold mb-1">{{ _('total_stores_kpi') }}</p>
-                            <div class="text-3xl font-black">{{ total_stores }}</div>
-                            <div class="text-xs text-gray-500 mt-2 flex gap-3">
-                                <span class="text-green-400">● {{ active_stores }} {{ _('active_kpi') }}</span>
-                                <span class="text-red-400">● {{ overdue_stores }} {{ _('overdue_kpi') }}</span>
-                            </div>
-                        </div>
-                        <div class="h-12 w-px bg-gray-700 mx-4"></div>
-                        <div>
-                            <p class="text-gray-400 text-sm font-bold mb-1">{{ _('messages_orders_today') }}</p>
-                            <div class="text-3xl font-black">{{ messages_today }} / {{ total_orders }}</div>
-                        </div>
+                    <p class="text-gray-400 text-sm font-bold mb-1">Active Stores Count</p>
+                    <div class="text-4xl font-black text-blue-400 flex items-baseline gap-1">
+                        {{ active_stores }} <span class="text-xs text-gray-500 ml-2">/ {{ total_stores }} Total</span>
+                    </div>
+                </div>
+                <!-- Expiring Soon -->
+                <div class="bg-gray-800 rounded-2xl p-6 border border-gray-700 shadow-xl relative overflow-hidden group hover:-translate-y-1 transition duration-300">
+                    <div class="absolute -right-6 -top-6 w-24 h-24 bg-red-500/10 rounded-full blur-2xl group-hover:scale-150 transition-transform duration-500"></div>
+                    <p class="text-gray-400 text-sm font-bold mb-1">Expiring Soon / Overdue</p>
+                    <div class="text-4xl font-black text-red-500 flex items-baseline gap-1">
+                        {{ overdue_stores }}
                     </div>
                 </div>
             </div>
@@ -119,38 +116,65 @@
                 </div>
             </div>
 
-            <!-- Audit Logs -->
-            <div class="bg-gray-800 border border-gray-700 rounded-2xl p-6 shadow-xl">
-                <h3 class="text-lg font-black mb-6">{{ _('audit_logs_header') }}</h3>
-                <div class="overflow-x-auto">
-                    <table class="w-full text-sm text-right">
-                        <thead class="text-xs text-gray-400 bg-gray-900/50 uppercase border-b border-gray-700">
-                            <tr>
-                                <th class="px-4 py-3 rounded-tr-lg">ID</th>
-                                <th class="px-4 py-3">{{ _('date_time') }}</th>
-                                <th class="px-4 py-3">{{ _('action_taken') }}</th>
-                                <th class="px-4 py-3 rounded-tl-lg">{{ _('target_store_id') }}</th>
-                            </tr>
-                        </thead>
-                        <tbody class="divide-y divide-gray-700/50">
-                            {% for log in admin_logs %}
-                            <tr class="hover:bg-gray-700/20 transition">
-                                <td class="px-4 py-3 font-mono text-gray-500">#{{ log.id }}</td>
-                                <td class="px-4 py-3 text-gray-400 font-mono">{{ log.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}</td>
-                                <td class="px-4 py-3 font-bold text-blue-400">{{ log.action }}</td>
-                                <td class="px-4 py-3 font-mono">
-                                    {% if log.target_store_id %}
-                                        <a href="/admin/store/{{ log.target_store_id }}" class="text-purple-400 hover:underline">Store {{ log.target_store_id }}</a>
-                                    {% else %}
-                                        <span class="text-gray-600">-</span>
-                                    {% endif %}
-                                </td>
-                            </tr>
-                            {% else %}
-                            <tr><td colspan="4" class="px-4 py-8 text-center text-gray-500 italic">{{ _('no_logs_yet') }}</td></tr>
+            <!-- Grid for Table and Activity Feed -->
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <!-- Stores Performance Table -->
+                <div class="lg:col-span-2 bg-gray-800 border border-gray-700 rounded-2xl p-6 shadow-xl flex flex-col">
+                    <h3 class="text-lg font-black mb-6">Stores Performance Table</h3>
+                    <div class="overflow-x-auto flex-1 h-[400px]">
+                        <table class="w-full text-sm text-right">
+                            <thead class="text-xs text-gray-400 bg-gray-900/50 uppercase border-b border-gray-700 sticky top-0 z-10">
+                                <tr>
+                                    <th class="px-4 py-3 rounded-tr-lg">Store Name</th>
+                                    <th class="px-4 py-3">Users</th>
+                                    <th class="px-4 py-3">Tokens Used</th>
+                                    <th class="px-4 py-3">Conversion Rate</th>
+                                    <th class="px-4 py-3 rounded-tl-lg text-left">Status</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-gray-700/50">
+                                {% if stores %}
+                                    {% for s in stores %}
+                                    <tr class="hover:bg-gray-700/20 transition">
+                                        <td class="px-4 py-3 font-bold text-blue-400">{{ s.name | default('-') }}</td>
+                                        <td class="px-4 py-3 text-gray-300 font-mono">{{ s.users_count | default('-') }}</td>
+                                        <td class="px-4 py-3 text-purple-400 font-mono">{{ s.tokens_used | default('-') }}</td>
+                                        <td class="px-4 py-3 text-green-400 font-mono">{{ s.conversion_rate | default('-') }}{% if s.conversion_rate %}%{% endif %}</td>
+                                        <td class="px-4 py-3 text-left">
+                                            {% if s.status == 'active' %}
+                                                <span class="bg-green-500/10 text-green-400 px-2 py-1 rounded text-xs font-bold">Active</span>
+                                            {% else %}
+                                                <span class="bg-red-500/10 text-red-400 px-2 py-1 rounded text-xs font-bold">{{ s.status | default('-') }}</span>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                {% else %}
+                                    <tr><td colspan="5" class="px-4 py-8 text-center text-gray-500 italic">No data available</td></tr>
+                                {% endif %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Recent Activity Feed -->
+                <div class="bg-gray-800 border border-gray-700 rounded-2xl p-6 shadow-xl flex flex-col h-[400px]">
+                    <h3 class="text-lg font-black mb-6">Recent Activity</h3>
+                    <div class="flex-1 overflow-y-auto pr-2 space-y-4">
+                        {% if recent_activity %}
+                            {% for event in recent_activity %}
+                            <div class="flex items-start gap-4 p-3 rounded-xl bg-gray-900/50 border border-gray-700/50">
+                                <div class="text-2xl">{{ event.icon | default('✨') }}</div>
+                                <div>
+                                    <p class="text-sm font-bold text-gray-200">{{ event.message | default('-') }}</p>
+                                    <span class="text-xs text-gray-500">{{ event.time | default('-') }}</span>
+                                </div>
+                            </div>
                             {% endfor %}
-                        </tbody>
-                    </table>
+                        {% else %}
+                            <div class="flex items-center justify-center h-full text-gray-500 italic">No recent activity</div>
+                        {% endif %}
+                    </div>
                 </div>
             </div>
 

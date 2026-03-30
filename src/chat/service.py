@@ -13,7 +13,10 @@ from src.ai_engine.service import ai_engine
 logger = logging.getLogger(__name__)
 
 def send_telegram_msg(token, chat_id, text):
-    requests.post(f"https://api.telegram.org/bot{token}/sendMessage", json={"chat_id": str(chat_id), "text": text})
+    print("DEBUG: Sending message to Telegram", chat_id, text)
+    print("CHAT ID:", chat_id)
+    response = requests.post(f"https://api.telegram.org/bot{token}/sendMessage", json={"chat_id": str(chat_id), "text": text})
+    print("TELEGRAM RESPONSE:", response.status_code, response.text)
 
 class ChatProcessingService:
     def handle_telegram_update(self, token: str, update: dict):
@@ -57,7 +60,11 @@ class ChatProcessingService:
         
         db = SessionLocal()
         try:
-            store = db.query(Store).filter(Store.telegram_token == token).first()
+            store = None
+            for s in db.query(Store).filter(Store.status == 'active').all():
+                if getattr(s, 'telegram_token', None) == token:
+                    store = s
+                    break
             if not store: return
             if not store.is_active: return # Ignore messages if store disabled
             
@@ -124,6 +131,18 @@ class ChatProcessingService:
             msg_content = text if text else "[أرسل العميل صورة]"
             msg_user = Message(conversation_id=conversation.id, role="user", content=msg_content)
             db.add(msg_user)
+            
+            # Task 5 Tracking: follow_up_replied
+            try:
+                import json
+                ctx = json.loads(conversation.context) if conversation.context else {}
+                if ctx.get("auto_followed_up_at"):
+                    logger.info(f"PERFORMANCE: follow_up_replied for Conv {conversation.id}")
+                    ctx.pop("auto_followed_up_at", None)
+                    ctx["has_replied_to_followup"] = True
+                    conversation.context = json.dumps(ctx)
+            except Exception as e: pass
+            
             db.commit()
             
             history = db.query(Message).filter(Message.conversation_id == conversation.id).order_by(Message.timestamp).all()
@@ -166,6 +185,41 @@ class ChatProcessingService:
             full_system_prompt += "4. الشراء: إذا اختار العميل المنتجات واختار مقاساً متاحاً (إن وجد) واختار طريقة الدفع وقدم إيصالاً للتحويل أو أكد رغبته بالدفع عند الاستلام، أضف السطر السري نهاية الرد: [CHECKOUT: رقم_المنتج]\n"
             full_system_prompt += "   هام جداً: مع كود CHECKOUT، اطلب منه إرسال 'عنوان التوصيل كاملاً' بلغته بالضبط لتأكيد إرسال الطلب.\n"
             full_system_prompt += "5. التحويل لبشري: لطلب الدعم البشري، أضف السطر السري نهاية الرد: [CATEGORY: HUMAN]\n"
+            
+            import json
+            ctx_data = {}
+            try:
+                ctx_data = json.loads(conversation.context) if conversation.context else {}
+            except Exception: pass
+            
+            last_status = ctx_data.get("lead_status", "")
+            last_product = ctx_data.get("last_product", "")
+            
+            ai_mode_prompt = ""
+            if getattr(store, "ai_mode", "sales") == "consultant":
+                ai_mode_prompt = "أنت الآن في وضع مستشار (Consultant). قدم إجابات غنية بالمعلومات ونصائح مفصلة بدون إلحاح على البيع.\n"
+            elif getattr(store, "ai_mode", "sales") == "support":
+                ai_mode_prompt = "أنت الآن في وضع الدعم الفني (Support). قدم إجابات قصيرة ومباشرة لحل مشكلة العميل العاجلة.\n"
+            else:
+                cta_prompt = "اختتم كلامك دائماً بتوجيه العميل للخطوة التالية.\n"
+                if last_status == "interested":
+                    cta_prompt = "العميل مهتم جداً: اختتم رسالتك بطلب قوي ومباشر للشراء أو حجز المنتج (مثال: هل أؤكد طلبك الآن؟ هل تحب أن أجهز الرابط والدفع؟).\n"
+                elif last_status == "needs_followup":
+                    cta_prompt = "العميل يحتاج إلى مساعدة في اتخاذ القرار: اختتم رسالتك بسؤال توضيحي مرن (مثال: هل تبحث عن لون محدد؟ ما الحجم الذي تفضله؟).\n"
+                elif last_status == "not_interested":
+                    cta_prompt = "العميل غير مهتم حالياً: اختتم رسالتك باقتراح أو عرض لمنتج مختلف أو خصم قد يجذب انتباهه كبديل.\n"
+                    
+                memory_prompt = ""
+                if last_product:
+                    memory_prompt = f"تذكير: العميل أظهر سابقاً اهتماماً بـ '{last_product}'، يرجى الإشارة إليه بذكاء إذا كان مناسباً للسياق.\n"
+                    
+                ai_mode_prompt = f"أنت الآن في وضع المبيعات (Sales). كن مقنعاً جداً.\n{memory_prompt}{cta_prompt}"
+                
+            full_system_prompt += f"\n**سلوك الذكاء الاصطناعي:** {ai_mode_prompt}"
+            full_system_prompt += """
+تصنيف العميل (إلزامي): أضف في نهاية رسالتك، وفي سطر مستقل تماماً، هذا الكود فقط لتقييم العميل واستخراج بياناته:
+{"lead_status":"interested"|"not_interested"|"needs_followup", "last_product":"المنتج هنا", "price_range":"السعر هنا", "intent":"نية العميل هنا"}
+"""
 
             import time
             start_time = time.time()
@@ -196,7 +250,41 @@ class ChatProcessingService:
             db.add(msg_ai)
             db.commit()
             
-            clean_reply = reply
+            clean_reply = reply.strip()
+            import json
+            import re
+            
+            status = None
+            json_match = re.search(r'(\{[\s\S]*?"lead_status"[\s\S]*?\})\s*$', clean_reply)
+            
+            try:
+                ctx = json.loads(conversation.context) if conversation.context else {}
+            except Exception:
+                ctx = {}
+                
+            if json_match:
+                try:
+                    extracted_data = json.loads(json_match.group(1))
+                    status = extracted_data.get("lead_status")
+                    clean_reply = clean_reply[:json_match.start()].strip()
+                    
+                    ctx["last_product"] = extracted_data.get("last_product", ctx.get("last_product"))
+                    ctx["price_range"] = extracted_data.get("price_range", ctx.get("price_range"))
+                    ctx["intent"] = extracted_data.get("intent", ctx.get("intent"))
+                except BaseException as e:
+                    logger.error(f"Failed parsing extended JSON: {e}")
+                    status = None
+                    
+            if not status or status not in ["interested", "not_interested", "needs_followup"]:
+                msg_count = db.query(Message).filter_by(conversation_id=conversation.id).count()
+                status = "needs_followup" if msg_count >= 2 else "not_interested"
+
+            ctx["lead_status"] = status
+            
+            conversation.context = json.dumps(ctx)
+            db.commit()
+            logger.info(f"[LEAD INTELLIGENCE TG] Conv {conversation.id} classified: {status}")
+
             # Handle categories parsing
             if '[CATEGORY: COMPLAINT]' in clean_reply:
                 clean_reply = clean_reply.replace('[CATEGORY: COMPLAINT]', '').strip()
@@ -230,6 +318,14 @@ class ChatProcessingService:
                 if p:
                     order = Order(user_id=user.id, store_id=store.id, total_amount=p.price, status="paid")
                     db.add(order)
+                    
+                    if not ctx.get("converted"):
+                        ctx["converted"] = True
+                        if ctx.get("follow_up_sent"):
+                            ctx["conversion_after_followup"] = True
+                            logger.info(f"PERFORMANCE: conversion_after_followup triggered for Conv {conversation.id}")
+                        conversation.context = json.dumps(ctx)
+                        
                     db.commit()
                     db.refresh(order)
                     
@@ -274,7 +370,11 @@ class ChatProcessingService:
             if not text: return
             
             db = SessionLocal()
-            store = db.query(Store).filter(Store.whatsapp_token == token).first()
+            store = None
+            for s in db.query(Store).filter(Store.status == 'active').all():
+                if getattr(s, 'whatsapp_token', None) == token:
+                    store = s
+                    break
             if not store or not store.is_active: return
             from datetime import datetime
             if store.subscription_end_date and datetime.utcnow() > store.subscription_end_date: return
@@ -296,6 +396,17 @@ class ChatProcessingService:
 
             msg_user = Message(conversation_id=conversation.id, role="user", content=text)
             db.add(msg_user)
+            
+            # Task 5 Tracking: follow_up_replied
+            try:
+                import json
+                ctx = json.loads(conversation.context) if conversation.context else {}
+                if ctx.get("follow_up_sent") and not ctx.get("follow_up_replied"):
+                    logger.info(f"PERFORMANCE: follow_up_replied for Conv {conversation.id}")
+                    ctx["follow_up_replied"] = True
+                    conversation.context = json.dumps(ctx)
+            except Exception as e: pass
+            
             db.commit()
             
             history = db.query(Message).filter(Message.conversation_id == conversation.id).order_by(Message.id.asc()).all()
@@ -303,7 +414,105 @@ class ChatProcessingService:
             
             full_system_prompt = f"أنت مندوب مبيعات لمتجر '{store.name}' يتواصل عبر WhatsApp. العميل مسجل بالاسم '{user.first_name}'.\n"
             if store.policy: full_system_prompt += f"سياسة المتجر الواجب الالتزام بها: {store.policy}\n"
+            
+            import json
+            ctx_data = {}
+            try:
+                ctx_data = json.loads(conversation.context) if conversation.context else {}
+            except Exception: pass
+            
+            last_status = ctx_data.get("lead_status", "")
+            last_product = ctx_data.get("last_product", "")
+            
+            ai_mode_prompt = ""
+            if getattr(store, "ai_mode", "sales") == "consultant":
+                ai_mode_prompt = "أنت الآن في وضع مستشار (Consultant). قدم إجابات غنية بالمعلومات ونصائح مفصلة بدون إلحاح على البيع.\n"
+            elif getattr(store, "ai_mode", "sales") == "support":
+                ai_mode_prompt = "أنت الآن في وضع الدعم الفني (Support). قدم إجابات قصيرة ومباشرة لحل مشكلة العميل العاجلة.\n"
+            else:
+                cta_prompt = "اختتم كلامك دائماً بتوجيه العميل للخطوة التالية.\n"
+                if last_status == "interested":
+                    cta_prompt = "العميل مهتم جداً: اختتم رسالتك بطلب قوي ومباشر للشراء أو حجز المنتج (مثال: هل أؤكد طلبك الآن؟ هل تحب أن أجهز الرابط والدفع؟).\n"
+                elif last_status == "needs_followup":
+                    cta_prompt = "العميل يحتاج إلى مساعدة في اتخاذ القرار: اختتم رسالتك بسؤال توضيحي مرن (مثال: هل تبحث عن لون محدد؟ ما الحجم الذي تفضله؟).\n"
+                elif last_status == "not_interested":
+                    cta_prompt = "العميل غير مهتم حالياً: اختتم رسالتك باقتراح أو عرض لمنتج مختلف أو خصم قد يجذب انتباهه كبديل.\n"
+                    
+                memory_prompt = ""
+                if last_product:
+                    memory_prompt = f"تذكير: العميل أظهر سابقاً اهتماماً بـ '{last_product}'، يرجى الإشارة إليه بذكاء إذا كان مناسباً للسياق.\n"
+                    
+                ai_mode_prompt = f"أنت الآن في وضع المبيعات (Sales). كن مقنعاً جداً.\n{memory_prompt}{cta_prompt}"
+                
+            full_system_prompt += f"\n**سلوك الذكاء الاصطناعي:** {ai_mode_prompt}"
+            full_system_prompt += """
+تصنيف العميل (إلزامي): أضف في نهاية رسالتك، وفي سطر مستقل تماماً، هذا الكود فقط لتقييم العميل واستخراج بياناته:
+{"lead_status":"interested"|"not_interested"|"needs_followup", "last_product":"المنتج هنا", "price_range":"السعر هنا", "intent":"نية العميل هنا"}
+"""
             reply = ai_engine.generate_response(system_prompt=full_system_prompt, user_message=text, context=context)
+            
+            clean_reply = reply.strip()
+            import json
+            import re
+            
+            status = None
+            json_match = re.search(r'(\{[\s\S]*?"lead_status"[\s\S]*?\})\s*$', clean_reply)
+            
+            try:
+                ctx = json.loads(conversation.context) if conversation.context else {}
+            except Exception:
+                ctx = {}
+                
+            if json_match:
+                try:
+                    extracted_data = json.loads(json_match.group(1))
+                    status = extracted_data.get("lead_status")
+                    clean_reply = clean_reply[:json_match.start()].strip()
+                    
+                    ctx["last_product"] = extracted_data.get("last_product", ctx.get("last_product"))
+                    ctx["price_range"] = extracted_data.get("price_range", ctx.get("price_range"))
+                    ctx["intent"] = extracted_data.get("intent", ctx.get("intent"))
+                except BaseException as e:
+                    logger.error(f"Failed parsing extended JSON WA: {e}")
+                    status = None
+                    
+            if not status or status not in ["interested", "not_interested", "needs_followup"]:
+                msg_count = db.query(Message).filter_by(conversation_id=conversation.id).count()
+                status = "needs_followup" if msg_count >= 2 else "not_interested"
+
+            ctx["lead_status"] = status
+            
+            conversation.context = json.dumps(ctx)
+            db.commit()
+            logger.info(f"[LEAD INTELLIGENCE WA] Conv {conversation.id} classified: {status}")
+            
+            checkout_match = re.search(r'\[CHECKOUT:\s*(\d+)\]', clean_reply)
+            if checkout_match:
+                product_id = int(checkout_match.group(1).strip())
+                clean_reply = re.sub(r'\[CHECKOUT:\s*\d+\]', '', clean_reply).strip()
+                conversation.category = 'order'
+                db.commit()
+                p = db.query(Product).filter_by(id=product_id, store_id=store.id).first()
+                if p:
+                    order = Order(user_id=user.id, store_id=store.id, total_amount=p.price, status="paid")
+                    db.add(order)
+                    
+                    if not ctx.get("converted"):
+                        ctx["converted"] = True
+                        if ctx.get("follow_up_sent"):
+                            ctx["conversion_after_followup"] = True
+                            logger.info(f"PERFORMANCE: conversion_after_followup triggered for Conv {conversation.id}")
+                        conversation.context = json.dumps(ctx)
+                        
+                    db.commit()
+                    db.refresh(order)
+                    order_item = OrderItem(order_id=order.id, product_id=p.id, quantity=1, price_at_purchase=p.price)
+                    db.add(order_item)
+                    user.conversation_state = "checkout_address"
+                    user.active_order_id = order.id
+                    db.commit()
+                    
+            reply = clean_reply
             
             msg_ai = Message(conversation_id=conversation.id, role="assistant", content=reply)
             db.add(msg_ai)
@@ -351,7 +560,11 @@ class ChatProcessingService:
                 return
                 
             db = SessionLocal()
-            store = db.query(Store).filter(Store.instagram_token == token).first()
+            store = None
+            for s in db.query(Store).filter(Store.status == 'active').all():
+                if getattr(s, 'instagram_token', None) == token:
+                    store = s
+                    break
             if not store or not store.is_active: return
             from datetime import datetime
             if store.subscription_end_date and datetime.utcnow() > store.subscription_end_date: return
@@ -375,6 +588,17 @@ class ChatProcessingService:
 
             msg_user = Message(conversation_id=conversation.id, role="user", content=text)
             db.add(msg_user)
+            
+            # Task 5 Tracking: follow_up_replied
+            try:
+                import json
+                ctx = json.loads(conversation.context) if conversation.context else {}
+                if ctx.get("follow_up_sent") and not ctx.get("follow_up_replied"):
+                    logger.info(f"PERFORMANCE: follow_up_replied for Conv {conversation.id}")
+                    ctx["follow_up_replied"] = True
+                    conversation.context = json.dumps(ctx)
+            except Exception as e: pass
+            
             db.commit()
             
             history = db.query(Message).filter(Message.conversation_id == conversation.id).order_by(Message.id.asc()).all()
@@ -382,7 +606,106 @@ class ChatProcessingService:
             
             full_system_prompt = f"أنت مندوب مبيعات لمتجر '{store.name}' يتواصل عبر Instagram. العميل مسجل بالاسم '{user.first_name}'.\n"
             if store.policy: full_system_prompt += f"سياسة المتجر الواجب الالتزام بها: {store.policy}\n"
+            
+            import json
+            ctx_data = {}
+            try:
+                ctx_data = json.loads(conversation.context) if conversation.context else {}
+            except Exception: pass
+            
+            last_status = ctx_data.get("lead_status", "")
+            last_product = ctx_data.get("last_product", "")
+            
+            ai_mode_prompt = ""
+            if getattr(store, "ai_mode", "sales") == "consultant":
+                ai_mode_prompt = "أنت الآن في وضع مستشار (Consultant). قدم إجابات غنية بالمعلومات ونصائح مفصلة بدون إلحاح على البيع.\n"
+            elif getattr(store, "ai_mode", "sales") == "support":
+                ai_mode_prompt = "أنت الآن في وضع الدعم الفني (Support). قدم إجابات قصيرة ومباشرة لحل مشكلة العميل العاجلة.\n"
+            else:
+                cta_prompt = "اختتم كلامك دائماً بتوجيه العميل للخطوة التالية.\n"
+                if last_status == "interested":
+                    cta_prompt = "العميل مهتم جداً: اختتم رسالتك بطلب قوي ومباشر للشراء أو حجز المنتج (مثال: هل أؤكد طلبك الآن؟ هل تحب أن أجهز الرابط والدفع؟).\n"
+                elif last_status == "needs_followup":
+                    cta_prompt = "العميل يحتاج إلى مساعدة في اتخاذ القرار: اختتم رسالتك بسؤال توضيحي مرن (مثال: هل تبحث عن لون محدد؟ ما الحجم الذي تفضله؟).\n"
+                elif last_status == "not_interested":
+                    cta_prompt = "العميل غير مهتم حالياً: اختتم رسالتك باقتراح أو عرض لمنتج مختلف أو خصم قد يجذب انتباهه كبديل.\n"
+                    
+                memory_prompt = ""
+                if last_product:
+                    memory_prompt = f"تذكير: العميل أظهر سابقاً اهتماماً بـ '{last_product}'، يرجى الإشارة إليه بذكاء إذا كان مناسباً للسياق.\n"
+                    
+                ai_mode_prompt = f"أنت الآن في وضع المبيعات (Sales). كن مقنعاً جداً.\n{memory_prompt}{cta_prompt}"
+                
+            full_system_prompt += f"\n**سلوك الذكاء الاصطناعي:** {ai_mode_prompt}"
+            full_system_prompt += """
+تصنيف العميل (إلزامي): أضف في نهاية رسالتك، وفي سطر مستقل تماماً، هذا الكود فقط لتقييم العميل واستخراج بياناته:
+{"lead_status":"interested"|"not_interested"|"needs_followup", "last_product":"المنتج هنا", "price_range":"السعر هنا", "intent":"نية العميل هنا"}
+"""
             reply = ai_engine.generate_response(system_prompt=full_system_prompt, user_message=text, context=context)
+            
+            clean_reply = reply.strip()
+            clean_reply = reply.strip()
+            import json
+            import re
+            
+            status = None
+            json_match = re.search(r'(\{[\s\S]*?"lead_status"[\s\S]*?\})\s*$', clean_reply)
+            
+            try:
+                ctx = json.loads(conversation.context) if conversation.context else {}
+            except Exception:
+                ctx = {}
+                
+            if json_match:
+                try:
+                    extracted_data = json.loads(json_match.group(1))
+                    status = extracted_data.get("lead_status")
+                    clean_reply = clean_reply[:json_match.start()].strip()
+                    
+                    ctx["last_product"] = extracted_data.get("last_product", ctx.get("last_product"))
+                    ctx["price_range"] = extracted_data.get("price_range", ctx.get("price_range"))
+                    ctx["intent"] = extracted_data.get("intent", ctx.get("intent"))
+                except BaseException as e:
+                    logger.error(f"Failed parsing extended JSON IG: {e}")
+                    status = None
+                    
+            if not status or status not in ["interested", "not_interested", "needs_followup"]:
+                msg_count = db.query(Message).filter_by(conversation_id=conversation.id).count()
+                status = "needs_followup" if msg_count >= 2 else "not_interested"
+
+            ctx["lead_status"] = status
+            
+            conversation.context = json.dumps(ctx)
+            db.commit()
+            logger.info(f"[LEAD INTELLIGENCE IG] Conv {conversation.id} classified: {status}")
+            
+            checkout_match = re.search(r'\[CHECKOUT:\s*(\d+)\]', clean_reply)
+            if checkout_match:
+                product_id = int(checkout_match.group(1).strip())
+                clean_reply = re.sub(r'\[CHECKOUT:\s*\d+\]', '', clean_reply).strip()
+                conversation.category = 'order'
+                db.commit()
+                p = db.query(Product).filter_by(id=product_id, store_id=store.id).first()
+                if p:
+                    order = Order(user_id=user.id, store_id=store.id, total_amount=p.price, status="paid")
+                    db.add(order)
+                    
+                    if not ctx.get("converted"):
+                        ctx["converted"] = True
+                        if ctx.get("follow_up_sent"):
+                            ctx["conversion_after_followup"] = True
+                            logger.info(f"PERFORMANCE: conversion_after_followup triggered for Conv {conversation.id}")
+                        conversation.context = json.dumps(ctx)
+                        
+                    db.commit()
+                    db.refresh(order)
+                    order_item = OrderItem(order_id=order.id, product_id=p.id, quantity=1, price_at_purchase=p.price)
+                    db.add(order_item)
+                    user.conversation_state = "checkout_address"
+                    user.active_order_id = order.id
+                    db.commit()
+                    
+            reply = clean_reply
             
             msg_ai = Message(conversation_id=conversation.id, role="assistant", content=reply)
             db.add(msg_ai)

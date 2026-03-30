@@ -72,7 +72,7 @@ def security_middleware():
 def admin_required(f):
     @wraps(f)
     def wrapper(*args, **kwargs):
-        if session.get("role") != "admin":
+        if not session.get("is_admin"):
             return redirect("/admin/login")
         return f(*args, **kwargs)
     return wrapper
@@ -98,7 +98,7 @@ def set_language(lang):
         session["lang"] = lang
     return redirect(request.referrer or "/")
 
-@app.route("/logout")
+@app.route("/logout", methods=["GET", "POST"])
 def logout():
     session.clear()
     return redirect("/login")
@@ -147,9 +147,11 @@ def dashboard():
 
         # Basic Stats
         total_conversations = db.query(Conversation).join(User).filter(User.store_id == store.id).count()
+        paid_users = db.query(User).join(Order).filter(User.store_id == store.id, Order.status == 'paid').distinct().count()
+        total_users = db.query(User).filter_by(store_id=store.id).count()
         total_orders = db.query(Order).filter_by(store_id=store.id, status='paid').count()
         revenue = db.query(func.sum(Order.total_amount)).filter(Order.store_id == store.id, Order.status == 'paid').scalar() or 0
-        conversion_rate = round((total_orders / total_conversations * 100), 1) if total_conversations > 0 else 0
+        conversion_rate = round((paid_users / total_users * 100), 1) if total_users > 0 else 0
 
         # Tokens & AI
         from src.chat.models import AILog
@@ -173,6 +175,23 @@ def dashboard():
         # Lists for CRM / Inventory / Orders
         try:
             conversations = db.query(Conversation).join(User).filter(User.store_id == store.id).order_by(Conversation.created_at.desc()).all()
+            import json
+            for c in conversations:
+                c.lead_status = "unknown"
+                if c.context:
+                    try:
+                        ctx = json.loads(c.context)
+                        c.lead_status = ctx.get("lead_status", "unknown")
+                        c.follow_up_sent = ctx.get("follow_up_sent", False)
+                        c.follow_up_replied = ctx.get("follow_up_replied", False)
+                        c.converted = ctx.get("converted", False)
+                        c.conversion_after_followup = ctx.get("conversion_after_followup", False)
+                        c.last_product = ctx.get("last_product", "")
+                        c.price_range = ctx.get("price_range", "")
+                        c.intent = ctx.get("intent", "")
+                    except Exception:
+                        pass
+                        
             human_requests = [c for c in conversations if c.requires_human]
             products = db.query(Product).filter(Product.store_id == store.id).all()
             orders = db.query(Order).filter(Order.store_id == store.id).order_by(Order.created_at.desc()).all()
@@ -188,6 +207,81 @@ def dashboard():
         if store.expires_at and store.expires_at < datetime.datetime.utcnow():
             is_expired = True
 
+        try:
+            from sqlalchemy import cast, Date
+            thirty_days_ago = datetime.datetime.utcnow() - datetime.timedelta(days=30)
+            logs = db.query(
+                cast(AILog.created_at, Date).label('date'),
+                func.sum(AILog.prompt_tokens + AILog.completion_tokens).label('tokens')
+            ).filter(AILog.store_id == store.id, AILog.created_at >= thirty_days_ago).group_by('date').order_by('date').all()
+            chart_dates = [log.date.strftime('%Y-%m-%d') for log in logs]
+            chart_tokens = [log.tokens for log in logs]
+        except SQLAlchemyError:
+            chart_dates = []
+            chart_tokens = []
+
+        print("API HIT: /merchant/dashboard-data")
+        print("TOGGLE AI:", store.ai_enabled)
+
+        # AI Smart Insights Logic
+        ai_insights = []
+        import logging
+        logger = logging.getLogger(__name__)
+
+        # Task 4: Insights Improvement
+        if total_conversations > 10:
+            if conversion_rate < 5.0:
+                msg = f"Your conversion rate is {conversion_rate}% (below average 5-8%). Review store policy to push for sales."
+                ai_insights.append({"icon": "⚠️", "text": msg, "color": "red"})
+                logger.info(f"Insight Generated (Store {store.id}): Low Conversion Warning")
+            elif 5.0 <= conversion_rate <= 10.0:
+                msg = f"Your conversion rate is {conversion_rate}% (average). Offer a discount code to push hesitant leads."
+                ai_insights.append({"icon": "💡", "text": msg, "color": "blue"})
+                logger.info(f"Insight Generated (Store {store.id}): Average Conversion Notice")
+            else:
+                msg = f"Your conversion rate is {conversion_rate}% (above average). Great job maintaining healthy engagement!"
+                ai_insights.append({"icon": "🚀", "text": msg, "color": "green"})
+                logger.info(f"Insight Generated (Store {store.id}): Good Conversion Praise")
+
+        if total_tokens > (monthly_token_limit * 0.4) and conversion_rate < 5.0:
+            msg = "Efficiency Warning: High token use without enough sales. Switch AI Mode to 'Sales'."
+            ai_insights.append({"icon": "💸", "text": msg, "color": "yellow"})
+            logger.info(f"Insight Generated (Store {store.id}): Efficiency Token Warning")
+        
+        if total_conversations > 0 and len(human_requests) > (total_conversations * 0.3):
+            ai_insights.append({"icon": "👨‍💼", "text": "طلب تدخل بشري كبير يفوق 30%. يرجى مراجعة 'سياسة المتجر' وتزويد المساعد بمعلومات أكثر شمولية.", "color": "yellow"})
+            
+        if not ai_insights:
+            if total_conversations == 0:
+                ai_insights.append({"icon": "✨", "text": "مرحباً! ستظهر التحليلات الذكية هنا فور بدء المحادثات.", "color": "blue"})
+            else:
+                ai_insights.append({"icon": "✅", "text": "وضع المنصة مستقر ومعدل الاستجابة مثالي.", "color": "green"})
+
+        # Task 1 & 4 Calculation
+        followups_sent = sum(1 for c in conversations if getattr(c, "follow_up_sent", False))
+        replied_count = sum(1 for c in conversations if getattr(c, "follow_up_replied", False))
+        conversions_after = sum(1 for c in conversations if getattr(c, "conversion_after_followup", False))
+        
+        followup_rate = round((followups_sent / total_conversations) * 100, 1) if total_conversations > 0 else 0
+        reply_rate = round((replied_count / followups_sent) * 100, 1) if followups_sent > 0 else 0
+        conversion_after_rate = round((conversions_after / replied_count) * 100, 1) if replied_count > 0 else 0
+
+        # Task 5
+        if followups_sent > 0 and conversions_after > 0:
+            imp_pct = round((conversions_after / total_conversations) * 100, 1) if total_conversations else 0
+            if imp_pct > 0:
+                ai_insights.append({"icon": "📈", "text": f"Follow-ups improved conversion by {imp_pct}%", "color": "green"})
+
+        metrics_funnel = {
+            "total": total_conversations,
+            "followups_sent": followups_sent,
+            "replied": replied_count,
+            "conversions_after": conversions_after,
+            "followup_rate": followup_rate,
+            "reply_rate": reply_rate,
+            "conversion_after_rate": conversion_after_rate
+        }
+
         return render_template("merchant.html", 
                                store=store, 
                                lang=store.language or "ar",
@@ -200,14 +294,16 @@ def dashboard():
                                total_tokens=total_tokens,
                                avg_latency=avg_latency,
                                ai_interactions=ai_interactions,
-                               chart_dates=[],
-                               chart_tokens=[],
+                               chart_dates=json.dumps(chart_dates),
+                               chart_tokens=json.dumps(chart_tokens),
                                conversations=conversations,
                                human_requests=human_requests,
                                products=products,
                                orders=orders,
                                users=users,
-                               revenue=revenue)
+                               revenue=revenue,
+                               ai_insights=ai_insights,
+                               metrics_funnel=metrics_funnel)
     finally:
         db.close()
 
@@ -242,6 +338,7 @@ def admin_login():
         if password == "superadmin123":  # Ideally moved to env vars
             session.permanent = True
             session["role"] = "admin"
+            session["is_admin"] = True
             session["lang"] = "ar"
             return redirect("/admin/dashboard")
         flash("Invalid Admin PIN", "error")
@@ -305,6 +402,13 @@ def admin_dashboard():
     finally:
         db.close()
 
+@app.route("/admin/store/<int:store_id>/login_as")
+@admin_required
+def admin_login_as(store_id):
+    session["role"] = "merchant"
+    session["store_id"] = store_id
+    return redirect("/dashboard")
+
 @app.route("/admin/stores", methods=["GET", "POST"])
 @admin_required
 def admin_stores():
@@ -329,7 +433,7 @@ def admin_stores():
             return redirect("/admin/stores")
             
         stores = db.query(Store).all()
-        return render_template("admin_stores.html", stores=stores)
+        return render_template("admin_stores.html", stores=stores, now=datetime.datetime.utcnow())
     finally:
         db.close()
 
@@ -381,8 +485,12 @@ def admin_store_detail(store_id):
                 store.status = "active"
                 store.is_active = True
             elif action == "quick_extend":
-                if store.expires_at:
-                    store.expires_at += datetime.timedelta(days=30)
+                if not store.expires_at:
+                    from datetime import datetime
+                    store.expires_at = datetime.utcnow()
+                
+                from datetime import timedelta
+                store.expires_at += timedelta(days=30)
             elif action == "delete":
                 db.delete(store)
                 db.commit()
@@ -478,6 +586,90 @@ def admin_store_detail(store_id):
                                order_count=order_count,
                                tokens_used=tokens_used,
                                features_dict=features_dict)
+    finally:
+        db.close()
+
+@app.route("/admin/messages-order", methods=["GET"])
+@admin_required
+def admin_messages_order():
+    print("API HIT: /admin/messages-order")
+    db = SessionLocal()
+    try:
+        from src.chat.models import Message
+        msgs = db.query(Message).order_by(Message.timestamp.desc()).limit(10).all()
+        data = [{"id": m.id, "role": m.role, "content": m.content} for m in msgs]
+        result = {"status": "success", "data": data}
+        print("DB RESULT:", result)
+        return jsonify(result)
+    finally:
+        db.close()
+
+@app.route("/admin/global-token", methods=["GET"])
+@admin_required
+def admin_global_token():
+    print("API HIT: /admin/global-token")
+    db = SessionLocal()
+    try:
+        stores = db.query(Store).all()
+        data = [{"store_id": s.id, "telegram_token": s.telegram_token} for s in stores]
+        result = {"status": "success", "data": data}
+        print("DB RESULT:", result)
+        return jsonify(result)
+    finally:
+        db.close()
+
+@app.route("/admin/global-live-feed", methods=["GET"])
+@admin_required
+def admin_global_live_feed():
+    print("API HIT: /admin/global-live-feed")
+    db = SessionLocal()
+    try:
+        from src.chat.models import Conversation
+        convs = db.query(Conversation).order_by(Conversation.created_at.desc()).limit(10).all()
+        data = [{"id": c.id, "user_id": c.user_id, "requires_human": c.requires_human} for c in convs]
+        result = {"status": "success", "data": data}
+        print("DB RESULT:", result)
+        return jsonify(result)
+    finally:
+        db.close()
+
+@app.route("/admin/global-ai-usage", methods=["GET"])
+@admin_required
+def admin_global_ai_usage():
+    print("API HIT: /admin/global-ai-usage")
+    db = SessionLocal()
+    try:
+        from src.chat.models import AILog
+        logs = db.query(AILog).order_by(AILog.created_at.desc()).limit(10).all()
+        data = [{"store_id": l.store_id, "prompt_tokens": l.prompt_tokens} for l in logs]
+        result = {"status": "success", "data": data}
+        print("DB RESULT:", result)
+        return jsonify(result)
+    finally:
+        db.close()
+
+@app.route("/admin/audit-logs-header", methods=["GET"])
+@admin_required
+def admin_audit_logs_header():
+    print("API HIT: /admin/audit-logs-header")
+    result = {"status": "success", "data": [{"log": "Active"}]}
+    print("DB RESULT:", result)
+    return jsonify(result)
+
+@app.route("/admin/subscription-days/<int:store_id>", methods=["GET"])
+@admin_required
+def admin_subscription_days(store_id):
+    print(f"API HIT: /admin/subscription-days/{store_id}")
+    db = SessionLocal()
+    try:
+        store = db.query(Store).filter_by(id=store_id).first()
+        days_left = 0
+        if store and getattr(store, 'next_billing_date', None):
+            days_left = max((store.next_billing_date - datetime.datetime.utcnow()).days, 0)
+        
+        result = {"days_left": days_left}
+        print("DB RESULT:", result)
+        return jsonify(result)
     finally:
         db.close()
 

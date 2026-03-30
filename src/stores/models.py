@@ -25,7 +25,12 @@ class EncryptedString(TypeDecorator):
 
     def process_result_value(self, value, dialect):
         if value is not None and fernet:
-            return fernet.decrypt(value.encode()).decode()
+            if value == "":
+                return ""
+            try:
+                return fernet.decrypt(value.encode()).decode()
+            except Exception:
+                return value
         return value
 
 class Store(Base):
@@ -48,6 +53,7 @@ class Store(Base):
     status = Column(String, default="active") # active, suspended, expired, blocked
     currency = Column(String, default="USD")
     features = Column(Text, default='{"whatsapp": false, "instagram": false, "voice": false, "advanced_ai": false}') # JSON
+    ai_enabled = Column(Boolean, default=True) # True = AI Active, False = AI Muted
     
     # --- Billing & Monetization (Phase 8) ---
     plan_price = Column(Float, default=0.0)

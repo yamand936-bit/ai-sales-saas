@@ -60,11 +60,18 @@
         </div>
         
         <div class="px-4 pb-6 mt-auto">
-            <a href="/logout" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-red-400 hover:bg-red-500 hover:text-white transition font-bold text-sm">
+            <button onclick="logout()" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-red-400 hover:bg-red-500 hover:text-white transition font-bold text-sm">
                 <span>🚪</span> {{ _('logout') }}
-            </a>
+            </button>
         </div>
     </aside>
+
+    <script>
+        function logout() {
+            fetch('/logout', { method: 'POST' })
+            .then(() => window.location.href = '/login');
+        }
+    </script>
 
     <!-- Main Content -->
     <main class="flex-1 flex flex-col h-screen overflow-hidden relative bg-slate-50">
@@ -81,6 +88,59 @@
             </div>
             
             <div class="flex items-center gap-2">
+                <button id="systemAiToggleBtn" onclick="toggleSystemAI({{ store.id }}, event)" class="text-[10px] font-bold px-3 py-1.5 rounded border {% if store.ai_enabled %}bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100{% else %}bg-slate-50 text-slate-500 border-slate-200 hover:bg-slate-100{% endif %} transition whitespace-nowrap">
+                    {% if store.ai_enabled %}🤖 Disable AI{% else %}❌ Enable AI{% endif %}
+                </button>
+                <script>
+                function toggleSystemAI(storeId, event) {
+                    event.preventDefault();
+                    fetch(`/merchant/${storeId}/toggle_system_ai`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': '{{ csrf_token() }}'
+                        },
+                        body: JSON.stringify({ csrf_token: '{{ csrf_token() }}' })
+                    })
+                    .then(res => res.json())
+                    .then(data => {
+                        if (data.status === 'success') {
+                            const btn = document.getElementById("systemAiToggleBtn");
+                            if (data.ai_enabled) {
+                                btn.className = "text-[10px] font-bold px-3 py-1.5 rounded border bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100 transition whitespace-nowrap";
+                                btn.innerText = "🤖 Disable AI";
+                            } else {
+                                btn.className = "text-[10px] font-bold px-3 py-1.5 rounded border bg-slate-50 text-slate-500 border-slate-200 hover:bg-slate-100 transition whitespace-nowrap";
+                                btn.innerText = "❌ Enable AI";
+                            }
+                            console.log("TOGGLE AI:", data.ai_enabled);
+                        }
+                    });
+                }
+                
+                function triggerDevFollowUp() {
+                    if(!confirm("DEV TRIGGER: Manually trigger the Auto Follow-Up crawler for this store?")) return;
+                    fetch(`/merchant/{{ store.id }}/auto_followup`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': '{{ csrf_token() }}'
+                        }
+                    })
+                    .then(res => res.json())
+                    .then(data => {
+                        if(data.status === 'success') {
+                            alert(`Follow-up triggered successfully.\nSent to ${data.sent} conversations.\nInactive threshold: ${data.delay_mins} mins.`);
+                            location.reload();
+                        } else {
+                            alert("Error: " + data.message);
+                        }
+                    });
+                }
+                </script>
+                <div class="h-6 border-r border-slate-200 mx-1"></div>
+                <button onclick="triggerDevFollowUp()" class="text-[9px] text-slate-300 hover:text-slate-500 font-mono px-2 transition" title="Dev Only: Trigger Auto Followup">⚙️ AFU</button>
+                <div class="h-6 border-r border-slate-200 mx-1"></div>
                 <a href="/set_lang/ar" class="text-xs font-bold px-3 py-1.5 rounded-lg border {% if lang == 'ar' %}bg-primary text-white border-primary{% else %}bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-200{% endif %} transition">عربي</a>
                 <a href="/set_lang/en" class="text-xs font-bold px-3 py-1.5 rounded-lg border {% if lang == 'en' %}bg-primary text-white border-primary{% else %}bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-200{% endif %} transition">EN</a>
                 <a href="/set_lang/tr" class="text-xs font-bold px-3 py-1.5 rounded-lg border {% if lang == 'tr' %}bg-primary text-white border-primary{% else %}bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-200{% endif %} transition">TR</a>
@@ -98,6 +158,25 @@
             
             <!-- ====== TAB: DASHBOARD ====== -->
             <section id="tab-dashboard" class="tab-pane absolute inset-0 overflow-y-auto p-8 scrollbar-hide">
+                
+                <!-- AI Smart Insights -->
+                {% if ai_insights %}
+                <div class="mb-8">
+                    <h3 class="text-lg font-black text-slate-800 flex items-center gap-2 mb-4">
+                        <span class="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-xl shadow-inner">🧠</span>
+                        AI Smart Insights
+                    </h3>
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {% for insight in ai_insights %}
+                        <div class="bg-white p-4 rounded-xl border border-{{ insight.color }}-200 border-l-4 border-l-{{ insight.color }}-500 shadow-sm flex items-start gap-4 hover:-translate-y-1 transition duration-300">
+                            <div class="text-2xl">{{ insight.icon }}</div>
+                            <p class="text-sm font-bold text-slate-600 leading-relaxed">{{ insight.text }}</p>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+
                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
                     <!-- KPI Cards -->
                     <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex flex-col gap-2">
@@ -109,15 +188,57 @@
                         <div class="text-3xl font-black text-blue-500">{{ total_orders }}</div>
                     </div>
                     <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex flex-col gap-2">
-                        <span class="text-slate-500 text-sm font-bold">{{ _('conversion_rate_paid') }}</span>
+                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex flex-col gap-2 relative overflow-hidden group">
+                        <span class="text-slate-500 text-sm font-bold">{{ _('conversion_rate_paid') }} (Paid Customers)</span>
                         <div class="text-3xl font-black text-green-500">{{ conversion_rate }}%</div>
+                        <div class="text-[10px] text-slate-400 mt-1">Percentage of users who completed a purchase.</div>
                     </div>
-                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex flex-col gap-2 relative overflow-hidden">
+                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex flex-col gap-2 relative overflow-hidden group">
                         <span class="text-slate-500 text-sm font-bold z-10">{{ _('total_tokens_used') }}</span>
                         <div class="text-3xl font-black text-purple-600 z-10">{{ total_tokens }}</div>
-                        <div class="absolute -right-4 -bottom-4 opacity-10 text-6xl">🪙</div>
+                        <div class="text-[10px] text-slate-400 mt-1 z-10">Total AI processing consumed by your store.</div>
+                        <div class="absolute -right-4 -bottom-4 opacity-10 text-6xl group-hover:scale-110 transition-transform">🪙</div>
                     </div>
                 </div>
+
+                <!-- Sales Funnel (Task 1 & 4) -->
+                {% if metrics_funnel %}
+                <div class="mb-8 items-center w-full">
+                    <h3 class="text-lg font-black text-slate-800 flex items-center gap-2 mb-4">
+                        <span class="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-xl shadow-inner">🎯</span>
+                        Sales Funnel Performance
+                    </h3>
+                    
+                    <div class="flex flex-col lg:flex-row items-center justify-between gap-6 w-full">
+                        <!-- Stage 1: Total Conversations -->
+                        <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 flex-1 text-center w-full relative">
+                            <div class="text-slate-500 font-bold mb-1">Total Conversations</div>
+                            <div class="text-4xl font-black text-slate-800">{{ metrics_funnel.total }}</div>
+                            <div class="absolute -right-4 top-1/2 -translate-y-1/2 z-10 hidden lg:block bg-slate-50 border border-slate-200 text-xs font-bold text-slate-500 px-2 py-1 rounded-full shadow-sm">{{ metrics_funnel.followup_rate }}%</div>
+                        </div>
+
+                        <!-- Stage 2: Sent Follow-ups -->
+                        <div class="bg-indigo-50 rounded-2xl shadow-sm border border-indigo-100 p-6 flex-1 text-center w-full relative">
+                            <div class="text-indigo-600 font-bold mb-1">Follow-ups Sent</div>
+                            <div class="text-4xl font-black text-indigo-800">{{ metrics_funnel.followups_sent }}</div>
+                            <div class="absolute -right-4 top-1/2 -translate-y-1/2 z-10 hidden lg:block bg-indigo-100 text-xs font-bold text-indigo-600 px-2 py-1 rounded-full shadow-sm">{{ metrics_funnel.reply_rate }}% Rep</div>
+                        </div>
+
+                        <!-- Stage 3: Replied! -->
+                        <div class="bg-blue-50 rounded-2xl shadow-sm border border-blue-100 p-6 flex-1 text-center w-full relative">
+                            <div class="text-blue-600 font-bold mb-1">Engaged (Replied)</div>
+                            <div class="text-4xl font-black text-blue-800">{{ metrics_funnel.replied }}</div>
+                            <div class="absolute -right-4 top-1/2 -translate-y-1/2 z-10 hidden lg:block bg-green-100 text-xs font-bold text-green-600 px-2 py-1 rounded-full shadow-sm">{{ metrics_funnel.conversion_after_rate }}% Conv</div>
+                        </div>
+
+                        <!-- Stage 4: Converted -->
+                        <div class="bg-green-50 rounded-2xl shadow-sm border border-green-100 p-6 flex-1 text-center w-full">
+                            <div class="text-green-600 font-bold mb-1">Converted 💰</div>
+                            <div class="text-4xl font-black text-green-800">{{ metrics_funnel.conversions_after }}</div>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
 
                 <!-- Metrics & Charts -->
                 <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -135,16 +256,15 @@
                     <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 flex flex-col justify-between">
                          <h3 class="text-lg font-black text-slate-800 mb-6">⚙️ {{ _('system_health') }}</h3>
                          
-                         <div class="space-y-6">
+                             <div>
+                                 <div class="flex justify-between text-sm mb-2"><span class="text-slate-500 font-bold">AI System Enabled</span><span class="font-black {% if store.ai_enabled %}text-green-600{% else %}text-red-500{% endif %}">{% if store.ai_enabled %}Active 🟢{% else %}Disabled 🔴{% endif %}</span></div>
+                             </div>
                              <div>
                                  <div class="flex justify-between text-sm mb-2"><span class="text-slate-500 font-bold">{{ _('avg_reply_speed') }}</span><span class="font-black text-green-600">{{ avg_latency }} ms</span></div>
-                                 <div class="w-full bg-slate-100 rounded-full h-2"><div class="bg-green-500 h-2 rounded-full" style="width: {% if avg_latency < 2000 %}100%{%else%}50%{%endif%}"></div></div>
+                                 <div class="w-full bg-slate-100 rounded-full h-2"><div class="bg-green-500 h-2 rounded-full" style="width: {% if avg_latency|int < 2000 %}100%{%else%}50%{%endif%}"></div></div>
                              </div>
                              <div>
                                  <div class="flex justify-between text-sm mb-2"><span class="text-slate-500 font-bold">{{ _('redis_conn_status') }}</span><span class="font-black text-primary">{{ _('connected_dot') }}</span></div>
-                             </div>
-                             <div>
-                                 <div class="flex justify-between text-sm mb-2"><span class="text-slate-500 font-bold">{{ _('ai_interactions_lbl') }}</span><span class="font-black text-purple-600">{{ ai_interactions }}</span></div>
                              </div>
                          </div>
                     </div>
@@ -160,37 +280,71 @@
                         <!-- Header & Filters -->
                         <div class="p-4 border-b border-slate-100 bg-slate-50 flex flex-col gap-3">
                             <h3 class="font-black text-lg">{{ _('chats_lbl') }}</h3>
-                            <input type="text" id="chatSearch" placeholder="🔍 {{ _('search_customer_placeholder') }}" class="w-full bg-white border border-slate-200 rounded-lg p-2.5 text-sm outline-none focus:border-primary transition" oninput="filterChats()">
+                            <div class="flex gap-2">
+                                <input type="text" id="chatSearch" placeholder="🔍 Name or Phone number..." class="w-full bg-white border border-slate-200 rounded-lg p-2.5 text-sm outline-none focus:border-primary transition" oninput="filterChats()">
+                                <button onclick="sortChats()" class="bg-slate-100 border border-slate-200 text-slate-600 p-2.5 rounded-lg hover:bg-slate-200 transition" title="Sort by Latest Activity">
+                                    <span id="sortDirection">⬇️</span>
+                                </button>
+                            </div>
                             <div class="flex gap-1 overflow-x-auto scrollbar-hide pb-1">
-                                <button onclick="setFilter('all')" class="crm-filter-btn active bg-slate-800 text-white text-xs px-3 py-1.5 rounded-lg whitespace-nowrap font-bold">{{ _('all_lbl') }}</button>
-                                <button onclick="setFilter('human')" class="crm-filter-btn bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs px-3 py-1.5 rounded-lg whitespace-nowrap font-bold">{{ _('needs_human_btn') }}</button>
-                                <button onclick="setFilter('ai')" class="crm-filter-btn bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs px-3 py-1.5 rounded-lg whitespace-nowrap font-bold">{{ _('ai_active_btn') }}</button>
+                                <button onclick="setFilter('all', event)" class="crm-filter-btn active bg-slate-800 text-white text-xs px-3 py-1.5 rounded-lg whitespace-nowrap font-bold">{{ _('all_lbl') }}</button>
+                                <button onclick="setFilter('human', event)" class="crm-filter-btn bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs px-3 py-1.5 rounded-lg whitespace-nowrap font-bold">{{ _('needs_human_btn') }}</button>
+                                <button onclick="setFilter('ai', event)" class="crm-filter-btn bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs px-3 py-1.5 rounded-lg whitespace-nowrap font-bold">{{ _('ai_active_btn') }}</button>
                             </div>
                         </div>
 
                         <!-- Chat List -->
-                        <div class="flex-1 overflow-y-auto chat-scroll" id="chatListDOM">
+                        <div class="flex-1 overflow-y-auto chat-scroll flex flex-col" id="chatListDOM">
                             {% for conv in conversations %}
+                            {% set last_msg = conv.messages[-1] if conv.messages else none %}
+                            {% set ts = last_msg.timestamp.timestamp() if last_msg else conv.created_at.timestamp() %}
                             <div class="chat-item p-4 border-b border-slate-100 hover:bg-slate-50 cursor-pointer transition relative" 
                                  data-id="{{ conv.id }}" data-userid="{{ conv.user_id }}" data-telegram="{{ conv.user.telegram_id }}" 
                                  data-name="{{ conv.user.first_name }}" data-human="{{ 'true' if conv.requires_human else 'false' }}"
+                                 data-phone="{{ conv.user.phone or '' }}" data-timestamp="{{ ts }}" data-lead="{{ conv.lead_status }}"
                                  onclick="openChat('{{ store.id }}', '{{ conv.user_id }}', '{{ conv.user.telegram_id }}', '{{ conv.user.first_name }}', {{ 'true' if conv.requires_human else 'false' }})">
                                  
                                 <div class="flex justify-between items-center mb-1">
                                     <div class="font-bold text-slate-800 truncate pr-2 flex items-center gap-2">
                                         {{ conv.user.first_name }}
+                                        {% if conv.user.phone %}
+                                            <span class="text-[10px] text-slate-500 font-normal">({{ conv.user.phone }})</span>
+                                        {% endif %}
                                         {% if conv.requires_human %}
                                             <span class="w-2.5 h-2.5 bg-red-500 rounded-full animate-pulse blur-[1px]"></span>
                                         {% endif %}
                                     </div>
-                                    <span class="text-[10px] text-slate-400 font-mono">{{ conv.created_at.strftime('%H:%M') }}</span>
+                                    <span class="text-[10px] text-slate-400 font-mono">
+                                        {% set last_msg = conv.messages[-1] if conv.messages else none %}
+                                        {{ last_msg.timestamp.strftime('%H:%M') if last_msg else conv.created_at.strftime('%H:%M') }}
+                                    </span>
                                 </div>
-                                <div class="text-xs text-slate-500 line-clamp-1">
-                                    {% if conv.requires_human %}
-                                        <span class="text-red-500 font-bold">{{ _('waiting_your_reply') }}</span>
-                                    {% else %}
-                                        <span class="text-green-600 font-bold">{{ _('ai_is_talking') }}</span>
-                                    {% endif %}
+                                <div class="text-xs text-slate-500 line-clamp-1 flex flex-col gap-1">
+                                    <span class="truncate">
+                                        {% if last_msg %}
+                                            {% if last_msg.role == 'assistant' %}🤖: {% else %}👤: {% endif %}
+                                            {{ last_msg.content }}
+                                        {% else %}
+                                            <i class="opacity-50">No messages</i>
+                                        {% endif %}
+                                    </span>
+                                    <div class="flex justify-between items-center mt-1">
+                                        <div class="flex gap-1.5">
+                                            {% if conv.requires_human %}
+                                                <span class="text-[10px] bg-red-50 text-red-600 px-2 py-0.5 rounded border border-red-100 font-bold">{{ _('waiting_your_reply') }}</span>
+                                            {% else %}
+                                                <span class="text-[10px] bg-green-50 text-green-600 px-2 py-0.5 rounded border border-green-100 font-bold">{{ _('ai_is_talking') }}</span>
+                                            {% endif %}
+                                        </div>
+                                        
+                                        {% if conv.lead_status == 'interested' %}
+                                            <span class="text-[10px] bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded border border-indigo-100 font-bold" title="Lead Status: Interested">🔥 Interested</span>
+                                        {% elif conv.lead_status == 'needs_followup' %}
+                                            <span class="text-[10px] bg-yellow-50 text-yellow-600 px-2 py-0.5 rounded border border-yellow-100 font-bold" title="Lead Status: Needs Follow-up">⚡ Follow Up</span>
+                                        {% elif conv.lead_status == 'not_interested' %}
+                                            <span class="text-[10px] bg-slate-50 text-slate-500 px-2 py-0.5 rounded border border-slate-200 font-bold" title="Lead Status: Not Interested">🧊 Cold</span>
+                                        {% endif %}
+                                    </div>
                                 </div>
                             </div>
                             {% endfor %}
@@ -253,14 +407,19 @@
             <!-- ====== TAB: PRODUCTS ====== -->
             <section id="tab-products" class="tab-pane absolute inset-0 hidden overflow-y-auto p-8 bg-slate-50">
                 <div class="flex justify-between items-center mb-8">
+                <div class="flex justify-between items-center mb-8 gap-4">
                     <h2 class="text-2xl font-black text-slate-800">{{ _('inventory_pricing_mgmt') }}</h2>
-                    <button class="bg-primary text-white font-bold px-6 py-2 rounded-lg shadow-sm hover:bg-indigo-700 transition" onclick="document.getElementById('addProductForm').classList.toggle('hidden')">{{ _('add_new_product_btn') }}</button>
+                    <div class="flex gap-2">
+                        <button class="bg-primary hover:bg-indigo-700 text-white font-bold px-4 py-2 rounded-lg shadow-sm transition whitespace-nowrap text-sm" onclick="openAddModal('product')">➕ {{ _('add_new_product_btn') }}</button>
+                        <button class="bg-purple-600 hover:bg-purple-700 text-white font-bold px-4 py-2 rounded-lg shadow-sm transition whitespace-nowrap text-sm" onclick="openAddModal('service')">➕ إرساء خدمة</button>
+                    </div>
                 </div>
                 
                 <!-- Add Product Form (Hidden by default) -->
                 <div id="addProductForm" class="hidden bg-white rounded-2xl p-6 shadow-sm border border-slate-200 mb-8">
                     <form action="/merchant/{{ store.id }}/add_product" method="POST" class="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="type" id="productTypeInput" value="product">
                         <div>
                             <label class="block text-xs font-bold text-slate-500 mb-1">{{ _('product_name') }}</label>
                             <input type="text" name="name" class="w-full border rounded-lg p-3 outline-none focus:border-primary text-sm" required>
@@ -279,16 +438,80 @@
                             <label class="block text-xs font-bold text-slate-500 mb-1 mt-3">{{ _('category_lbl') }}</label>
                             <input type="text" name="category" class="w-full border rounded-lg p-3 outline-none focus:border-primary text-sm" required>
                         </div>
-                        <div class="col-span-1 md:col-span-2 flex justify-end">
+                        <div class="col-span-1 md:col-span-2 border-t border-slate-100 pt-4 mt-2">
+                            <div class="flex items-center gap-4 mb-4">
+                                <label class="flex items-center gap-2 cursor-pointer">
+                                    <input type="checkbox" name="is_service" id="isServiceToggle" class="hidden peer" onchange="document.getElementById('bookingLinkContainer').classList.toggle('hidden', !this.checked)">
+                                    <div class="w-10 h-6 bg-slate-200 rounded-full peer-checked:bg-purple-600 relative transition">
+                                        <div class="w-4 h-4 bg-white rounded-full absolute left-1 top-1 peer-checked:translate-x-4 transition"></div>
+                                    </div>
+                                    <span class="text-sm font-bold text-slate-700">هذه خدمة وليست منتجاً ملموساً (للعيادات وغيرها)</span>
+                                </label>
+                            </div>
+                            <div id="bookingLinkContainer" class="hidden mb-4">
+                                <label class="block text-xs font-bold text-slate-500 mb-1">رابط الحجز الخارجي (اختياري)</label>
+                                <input type="url" name="booking_link" placeholder="https://calendly.com/..." class="w-full border rounded-lg p-3 outline-none focus:border-primary text-sm dir-ltr text-left">
+                            </div>
+                            <div id="durationContainer" class="hidden mb-4">
+                                <label class="block text-xs font-bold text-slate-500 mb-1">عمر الجلسة/الخدمة (اختياري بالدقائق)</label>
+                                <input type="number" name="duration" placeholder="e.g. 45" class="w-full border rounded-lg p-3 outline-none focus:border-primary text-sm dir-ltr text-left">
+                            </div>
+                        </div>
+                        <div class="col-span-1 md:col-span-2 flex justify-end gap-3">
+                            <button type="button" class="bg-slate-100 text-slate-600 font-bold px-6 py-3 rounded-xl hover:bg-slate-200 transition" onclick="document.getElementById('addProductForm').classList.add('hidden')">إلغاء</button>
                             <button type="submit" class="bg-green-600 text-white font-black px-8 py-3 rounded-xl shadow-md">{{ _('save') }} {{ _('in_inventory') }}</button>
                         </div>
                     </form>
                 </div>
 
+                <!-- Edit Product Form (Hidden by default) -->
+                <div id="editProductFormContainer" class="hidden bg-white rounded-2xl p-6 shadow-sm border border-slate-200 mb-8 border-t-4 border-t-yellow-400">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-lg font-black text-slate-800">تعديل العنصر</h3>
+                    </div>
+                    <form id="editProductForm" method="POST" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <div>
+                            <label class="block text-xs font-bold text-slate-500 mb-1">{{ _('product_name') }}</label>
+                            <input type="text" name="name" id="editProductName" class="w-full border rounded-lg p-3 outline-none focus:border-primary text-sm" required>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-slate-500 mb-1">السعر ({{ store.currency }})</label>
+                            <input type="number" step="0.01" name="price" id="editProductPrice" class="w-full border rounded-lg p-3 outline-none focus:border-primary text-sm dir-ltr text-left" required>
+                        </div>
+                        <div class="col-span-1 md:col-span-2">
+                            <label class="block text-xs font-bold text-slate-500 mb-1">{{ _('ai_directed_desc') }}</label>
+                            <textarea name="description" id="editProductDesc" class="w-full border rounded-lg p-3 outline-none focus:border-primary text-sm" rows="3" required></textarea>
+                        </div>
+                        <div class="col-span-1 md:col-span-2 flex justify-end gap-3">
+                            <button type="button" class="bg-slate-100 text-slate-600 font-bold px-6 py-3 rounded-xl hover:bg-slate-200 transition" onclick="document.getElementById('editProductFormContainer').classList.add('hidden')">إلغاء</button>
+                            <button type="submit" class="bg-yellow-500 text-white font-black px-8 py-3 rounded-xl shadow-md">حفظ التعديلات</button>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- Inventory Tabs & Filters -->
+                <div class="flex items-center gap-4 mb-6 border-b border-slate-200">
+                    <button onclick="switchInventoryTab('products')" id="tabBtnProducts" class="pb-2 px-4 font-bold border-b-2 border-primary text-primary transition">📦 المنتجات</button>
+                    <button onclick="switchInventoryTab('services')" id="tabBtnServices" class="pb-2 px-4 font-bold border-b-2 border-transparent text-slate-500 hover:text-slate-800 transition">🛠️ الخدمات</button>
+                    <div class="flex-1"></div>
+                    <select id="invCategoryFilter" onchange="filterInventory()" class="border border-slate-200 rounded-lg px-3 py-1.5 text-sm outline-none bg-white text-slate-700 font-bold mb-2">
+                        <option value="all">كل التصنيفات</option>
+                        {% set cats = [] %}
+                        {% for p in products %}
+                            {% if p.category not in cats %}
+                                {% set _ = cats.append(p.category) %}
+                                <option value="{{ p.category }}">{{ p.category }}</option>
+                            {% endif %}
+                        {% endfor %}
+                    </select>
+                </div>
+
                 <!-- Products Grid -->
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                <div id="invProductsView" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                     {% for p in products %}
-                    <div class="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden relative group">
+                    {% if not p.is_service %}
+                    <div class="inv-item bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden relative group" data-cat="{{ p.category }}">
                         {% if p.image_url %}
                             <div class="h-48 overflow-hidden"><img src="{{ p.image_url }}" class="w-full h-full object-cover group-hover:scale-105 transition duration-500"></div>
                         {% else %}
@@ -296,7 +519,9 @@
                         {% endif %}
                         <div class="p-5">
                             <div class="flex justify-between items-start mb-2">
-                                <h3 class="font-black text-slate-800 line-clamp-1">{{ p.name }}</h3>
+                                <h3 class="font-black text-slate-800 line-clamp-1">
+                                    {{ p.name }}
+                                </h3>
                                 <span class="bg-slate-100 text-slate-600 px-2 py-0.5 rounded text-xs font-bold">{{ p.category }}</span>
                             </div>
                             <p class="text-primary font-black mb-3 text-lg">{{ p.price }} {{ store.currency }}</p>
@@ -305,7 +530,6 @@
                             <div class="mb-4">
                                 <p class="text-xs font-bold text-slate-500 mb-2">{{ _('sizes_click_to_edit') }}</p>
                                 <div class="flex flex-wrap gap-2 text-xs" id="sizes-{{ p.id }}">
-                                    <!-- Assume sizes is JSON dict: {"S": true, "M": false} -->
                                     {% if p.sizes %}
                                         <div class="text-slate-400 font-mono text-[10px] break-all leading-tight">{{ p.sizes }}</div>
                                     {% else %}
@@ -327,9 +551,47 @@
                                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                     <button type="submit" class="text-xs text-slate-400 hover:text-red-500 font-bold px-2">🗑️ حذف</button>
                                 </form>
+                                <button type="button" class="text-xs text-slate-400 hover:text-yellow-500 font-bold px-2" onclick="openEditModal({{ p.id }}, '{{ p.name | replace('\'', '\\\'') }}', {{ p.price }}, '{{ p.description | replace('\'', '\\\'') | replace('\n', '\\n') }}')">✏️ تعديل</button>
                             </div>
                         </div>
                     </div>
+                    {% endif %}
+                    {% endfor %}
+                </div>
+
+                <!-- Services List View -->
+                <div id="invServicesView" class="hidden flex-col gap-4">
+                    {% for p in products %}
+                    {% if p.is_service %}
+                    <div class="inv-item bg-white rounded-xl shadow-sm border border-slate-100 p-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4" data-cat="{{ p.category }}">
+                        <div>
+                            <div class="flex items-center gap-3 mb-1">
+                                <h3 class="font-black text-lg text-slate-800">{{ p.name }}</h3>
+                                <span class="bg-purple-100 text-purple-700 text-xs px-2 py-0.5 rounded-full font-bold">{{ p.category }}</span>
+                            </div>
+                            <div class="text-sm text-slate-500 flex gap-4">
+                                <span>عمر الجلسة: <span class="font-mono text-slate-700 font-bold">{{ p.duration|default('-') }}</span> دقيقة</span>
+                                {% if p.booking_link %}
+                                <a href="{{ p.booking_link }}" target="_blank" class="text-blue-500 hover:underline">رابط الحجز 🔗</a>
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-8">
+                            <div class="text-primary font-black text-2xl whitespace-nowrap">{{ p.price }} {{ store.currency }}</div>
+                            <div class="flex items-center gap-2">
+                                <button type="button" class="text-xs bg-yellow-100 text-yellow-700 font-bold px-4 py-2 flex-grow-0 rounded-lg hover:bg-yellow-200" onclick="openEditModal({{ p.id }}, '{{ p.name | replace('\'', '\\\'') }}', {{ p.price }}, '{{ p.description | replace('\'', '\\\'') | replace('\n', '\\n') }}')">✏️ تعديل</button>
+                                <form action="/merchant/{{ store.id }}/toggle_product/{{ p.id }}" method="POST" class="m-0">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <button type="submit" class="text-xs font-bold {% if p.is_active %}bg-green-100 text-green-700 hover:bg-red-100{% else %}bg-red-100 text-red-700 hover:bg-green-100{% endif %} px-4 py-2 rounded-lg transition">{% if p.is_active %}{{ _('active_sale_btn') }}{% else %}{{ _('paused_btn') }}{% endif %}</button>
+                                </form>
+                                <form action="/merchant/{{ store.id }}/delete_product/{{ p.id }}" method="POST" class="m-0" onsubmit="return confirm('{{ _('confirm_delete') }}')">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <button type="submit" class="text-xs font-bold bg-slate-100 text-red-500 px-4 py-2 hover:bg-red-50 rounded-lg">🗑️</button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
                     {% endfor %}
                 </div>
             </section>
@@ -521,9 +783,46 @@
             });
         }
 
+        // --- Inventory Logic ---
+        function switchInventoryTab(tab) {
+            const btnProducts = document.getElementById('tabBtnProducts');
+            const btnServices = document.getElementById('tabBtnServices');
+            const viewProducts = document.getElementById('invProductsView');
+            const viewServices = document.getElementById('invServicesView');
+
+            if (tab === 'products') {
+                btnProducts.classList.replace('border-transparent', 'border-primary');
+                btnProducts.classList.replace('text-slate-500', 'text-primary');
+                btnServices.classList.replace('border-primary', 'border-transparent');
+                btnServices.classList.replace('text-primary', 'text-slate-500');
+                
+                viewProducts.classList.replace('hidden', 'grid');
+                viewServices.classList.replace('flex', 'hidden');
+            } else {
+                btnServices.classList.replace('border-transparent', 'border-primary');
+                btnServices.classList.replace('text-slate-500', 'text-primary');
+                btnProducts.classList.replace('border-primary', 'border-transparent');
+                btnProducts.classList.replace('text-primary', 'text-slate-500');
+
+                viewServices.classList.replace('hidden', 'flex');
+                viewProducts.classList.replace('grid', 'hidden');
+            }
+        }
+
+        function filterInventory() {
+            const cat = document.getElementById('invCategoryFilter').value;
+            document.querySelectorAll('.inv-item').forEach(item => {
+                if (cat === 'all' || item.getAttribute('data-cat') === cat) {
+                    item.style.display = '';
+                } else {
+                    item.style.display = 'none';
+                }
+            });
+        }
+
         // --- Chat CRM Logic ---
         let currentStatusFilter = 'all';
-        function setFilter(status) {
+        function setFilter(status, event) {
             currentStatusFilter = status;
             document.querySelectorAll('.crm-filter-btn').forEach(btn => {
                 btn.classList.remove('bg-slate-800', 'text-white');
@@ -539,15 +838,30 @@
             const items = document.querySelectorAll('.chat-item');
             items.forEach(item => {
                 const name = item.getAttribute('data-name').toLowerCase();
+                const phone = (item.getAttribute('data-phone') || '').toLowerCase();
                 const isHuman = item.getAttribute('data-human') === 'true';
                 
-                let matchesSearch = name.includes(query);
+                let matchesSearch = name.includes(query) || phone.includes(query);
                 let matchesFilter = true;
                 if (currentStatusFilter === 'human' && !isHuman) matchesFilter = false;
                 if (currentStatusFilter === 'ai' && isHuman) matchesFilter = false;
                 
                 item.style.display = (matchesSearch && matchesFilter) ? 'block' : 'none';
             });
+        }
+        
+        let sortAsc = false;
+        function sortChats() {
+            sortAsc = !sortAsc;
+            document.getElementById('sortDirection').innerText = sortAsc ? '⬆️' : '⬇️';
+            const list = document.getElementById('chatListDOM');
+            const items = Array.from(list.querySelectorAll('.chat-item'));
+            items.sort((a, b) => {
+                const tsA = parseFloat(a.getAttribute('data-timestamp') || 0);
+                const tsB = parseFloat(b.getAttribute('data-timestamp') || 0);
+                return sortAsc ? tsA - tsB : tsB - tsA;
+            });
+            items.forEach(item => list.appendChild(item));
         }
 
         // Load active chat
@@ -569,6 +883,80 @@
                 aiBtn.className = "text-xs font-bold px-4 py-2 rounded-lg transition shadow-sm border bg-green-50 text-green-700 border-green-200 hover:bg-green-100";
                 aiBtn.innerText = "▶️ تفعيل AI";
             } else {
+                document.getElementById('activeChatStatus').innerHTML = '<span class="text-green-600">{{ _(\'ai_active_btn\') }}</span>';
+                aiBtn.className = "text-xs font-bold px-4 py-2 rounded-lg transition shadow-sm border bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100";
+                aiBtn.innerText = "⏸️ إيقاف AI مؤقتاً";
+            }
+
+            // Fetch Messages via AJAX (Pagination mechanism for limits)
+            const canvas = document.getElementById('chatCanvas');
+            canvas.innerHTML = '<div class="text-center text-slate-400 mt-10">جاري تحميل الرسائل...</div>';
+            
+            try {
+                const res = await fetch(`/api/merchant/${storeId}/messages/${userId}?page=1`);
+                const responsePayload = await res.json();
+                
+                let msgArray = responsePayload?.data?.messages || responsePayload?.messages || responsePayload?.data || [];
+                if (!Array.isArray(msgArray)) msgArray = [];
+                
+                canvas.innerHTML = '';
+                
+                msgArray?.forEach(msg => {
+                    const isAi = msg?.role === 'assistant';
+                    const content = msg?.content || '';
+                    const bubble = document.createElement('div');
+                    bubble.className = `max-w-[80%] p-4 rounded-xl text-sm shadow-sm relative ${
+                        isAi ? 'bg-white border border-slate-100 self-start rounded-tr-none text-slate-800' 
+                             : 'bg-primary text-white self-end rounded-tl-none'
+                    }`;
+                    bubble.innerHTML = `
+                        <p class="leading-relaxed whitespace-pre-wrap">${content}</p>
+                        <span class="text-[10px] absolute -bottom-4 right-1 opacity-50 text-slate-500">${msg?.time || 'now'}</span>
+                    `;
+                    canvas.appendChild(bubble);
+                });
+                
+                if(msgArray.length === 0) {
+                     canvas.innerHTML = '<div class="text-center text-slate-400 mt-10">لا توجد رسائل سابقة.</div>';
+                }
+                
+                canvas.scrollTop = canvas.scrollHeight;
+            } catch(e) {
+                canvas.innerHTML = '<div class="text-center text-red-500">حدث خطأ في جلب الشبكة.</div>';
+            }
+        }
+
+        function openAddModal(type) {
+            document.getElementById('addProductForm').classList.remove('hidden');
+            document.getElementById('editProductFormContainer').classList.add('hidden');
+            document.getElementById('productTypeInput').value = type;
+            
+            if (type === 'service') {
+                document.getElementById('durationContainer').classList.remove('hidden');
+            } else {
+                document.getElementById('durationContainer').classList.add('hidden');
+            }
+        }
+
+        function openEditModal(id, name, price, desc) {
+            document.getElementById('addProductForm').classList.add('hidden');
+            const container = document.getElementById('editProductFormContainer');
+            container.classList.remove('hidden');
+            
+            document.getElementById('editProductForm').action = '/merchant/product/' + id;
+            document.getElementById('editProductName').value = name;
+            document.getElementById('editProductPrice').value = price;
+            document.getElementById('editProductDesc').value = desc;
+            
+            container.scrollIntoView({ behavior: 'smooth' });
+        }
+            toggleForm.action = `/merchant/${storeId}/toggle_ai/${userId}`;
+            
+            if (requiresHuman) {
+                document.getElementById('activeChatStatus').innerHTML = '<span class="text-red-500">تدخل بشري معلق 🔴</span>';
+                aiBtn.className = "text-xs font-bold px-4 py-2 rounded-lg transition shadow-sm border bg-green-50 text-green-700 border-green-200 hover:bg-green-100";
+                aiBtn.innerText = "▶️ تفعيل AI";
+            } else {
                 document.getElementById('activeChatStatus').innerHTML = '<span class="text-green-600">{{ _('ai_active_btn') }}</span>';
                 aiBtn.className = "text-xs font-bold px-4 py-2 rounded-lg transition shadow-sm border bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100";
                 aiBtn.innerText = "⏸️ إيقاف AI مؤقتاً";
@@ -580,22 +968,33 @@
             
             try {
                 const res = await fetch(`/api/merchant/${storeId}/messages/${userId}?page=1`);
-                const data = await res.json();
+                const responsePayload = await res.json();
+                
+                // Fix API RESPONSE HANDLING: handle standard payload or wrapped {data: [...]} 
+                let msgArray = responsePayload?.data?.messages || responsePayload?.messages || responsePayload?.data || [];
+                if (!Array.isArray(msgArray)) msgArray = [];
+                
                 canvas.innerHTML = '';
                 
-                data.messages.forEach(msg => {
-                    const isAi = msg.role === 'assistant';
+                // Add NULL SAFETY (optional chaining map/forEach)
+                msgArray?.forEach(msg => {
+                    const isAi = msg?.role === 'assistant';
+                    const content = msg?.content || '';
                     const bubble = document.createElement('div');
                     bubble.className = `max-w-[80%] p-4 rounded-xl text-sm shadow-sm relative ${
                         isAi ? 'bg-white border border-slate-100 self-start rounded-tr-none text-slate-800' 
                              : 'bg-primary text-white self-end rounded-tl-none'
                     }`;
                     bubble.innerHTML = `
-                        <p class="leading-relaxed whitespace-pre-wrap">${msg.content}</p>
-                        <span class="text-[10px] absolute -bottom-4 right-1 opacity-50 text-slate-500">${msg.time}</span>
+                        <p class="leading-relaxed whitespace-pre-wrap">${content}</p>
+                        <span class="text-[10px] absolute -bottom-4 right-1 opacity-50 text-slate-500">${msg?.time || 'now'}</span>
                     `;
                     canvas.appendChild(bubble);
                 });
+                
+                if(msgArray.length === 0) {
+                     canvas.innerHTML = '<div class="text-center text-slate-400 mt-10">لا توجد رسائل سابقة.</div>';
+                }
                 
                 // Scroll to bottom natively
                 canvas.scrollTop = canvas.scrollHeight;
