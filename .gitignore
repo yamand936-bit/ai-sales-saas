@@ -1,6 +1,25 @@
-venv/
-__pycache__/
+# Environment Variables
 .env
-*.pyc
-*.log
+
+# SQLite Database
+*.db
+*.sqlite3
 saas.db
+
+# Python Caches
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Temporary/Dev Files
+verify_env.py
+init_db_sync.py
+deploy_frontend.py
+deploy_apis.py
+deploy_schema.py
+
+# Virtual Environments
+venv/
+.env/
+env/
+.venv/
