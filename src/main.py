@@ -211,11 +211,11 @@ def dashboard():
             from sqlalchemy import cast, Date
             thirty_days_ago = datetime.datetime.utcnow() - datetime.timedelta(days=30)
             logs = db.query(
-                cast(AILog.created_at, Date).label('date'),
+                func.date(AILog.created_at).label('date'),
                 func.sum(AILog.prompt_tokens + AILog.completion_tokens).label('tokens')
-            ).filter(AILog.store_id == store.id, AILog.created_at >= thirty_days_ago).group_by('date').order_by('date').all()
-            chart_dates = [log.date.strftime('%Y-%m-%d') for log in logs]
-            chart_tokens = [log.tokens for log in logs]
+            ).filter(AILog.store_id == store.id, AILog.created_at >= thirty_days_ago).group_by(func.date(AILog.created_at)).all()
+            chart_dates = [log.date for log in logs if log.date]
+            chart_tokens = [log.tokens for log in logs if log.date]
         except SQLAlchemyError:
             chart_dates = []
             chart_tokens = []
