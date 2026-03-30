@@ -129,3 +129,65 @@ window.switchTab = switchTab;
 window.filterChats = filterChats;
 window.sortChats = sortChats;
 window.openChat = openChat;
+
+
+// --- Event Listeners Mapping ---
+function handleAction(el, event) {
+    const action = el.dataset.action;
+
+    if (action === "openChat") {
+        openChat(
+            el.dataset.storeId,
+            el.dataset.userId,
+            el.dataset.telegramId,
+            el.dataset.name,
+            el.dataset.human === "true"
+        );
+    }
+
+    if (action === "toggleAI") {
+        toggleSystemAI(el.dataset.storeId, event);
+    }
+
+    if (action === "switchTab") {
+        switchTab(el.dataset.tab);
+    }
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+    // Event delegation is safer for elements that might re-render, though querySelectorAll works for static.
+    document.body.addEventListener("click", (e) => {
+        let el = e.target.closest("[data-action]");
+        if (el) handleAction(el, e);
+    });
+});
+
+function handleAction(el, event) {
+    const action = el.dataset.action;
+
+    if (action === 'openChat') {
+        openChat(
+            el.dataset.storeId,
+            el.dataset.userId,
+            el.dataset.telegramId,
+            el.dataset.name,
+            el.dataset.human === 'true'
+        );
+    }
+
+    if (action === 'toggleAI') {
+        event.preventDefault();
+        toggleSystemAI(el.dataset.storeId, event);
+    }
+
+    if (action === 'switchTab') {
+        switchTab(el.dataset.tab);
+    }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    document.body.addEventListener('click', (e) => {
+        let el = e.target.closest('[data-action]');
+        if (el) handleAction(el, e);
+    });
+});

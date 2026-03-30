@@ -37,25 +37,25 @@
             </h1>
         </div>
         <div class="flex-1 overflow-y-auto py-6 flex flex-col gap-2 px-4 scrollbar-hide">
-            <button onclick="switchTab('dashboard')" id="nav-dashboard" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-slate-800 hover:text-white transition font-bold bg-primary text-white">
+            <button data-action="switchTab" data-tab="dashboard" id="nav-dashboard" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-slate-800 hover:text-white transition font-bold bg-primary text-white">
                 <span>📊</span> {{ _('stats') }}
             </button>
-            <button onclick="switchTab('crm')" id="nav-crm" class="w-full flex justify-between items-center px-4 py-3 rounded-xl hover:bg-slate-800 hover:text-white transition font-bold">
+            <button data-action="switchTab" data-tab="crm" id="nav-crm" class="w-full flex justify-between items-center px-4 py-3 rounded-xl hover:bg-slate-800 hover:text-white transition font-bold">
                 <div class="flex items-center gap-3"><span>💬</span> {{ _('crm') }}</div>
                 {% if human_requests|length > 0 %}
                     <span class="bg-red-500 text-white text-xs px-2 py-1 rounded-full animate-pulse">{{ human_requests|length }}</span>
                 {% endif %}
             </button>
-            <button onclick="switchTab('products')" id="nav-products" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-slate-800 hover:text-white transition font-bold">
+            <button data-action="switchTab" data-tab="products" id="nav-products" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-slate-800 hover:text-white transition font-bold">
                 <span>📦</span> {{ _('inventory') }}
             </button>
-            <button onclick="switchTab('orders')" id="nav-orders" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-slate-800 hover:text-white transition font-bold">
+            <button data-action="switchTab" data-tab="orders" id="nav-orders" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-slate-800 hover:text-white transition font-bold">
                 <span>🛒</span> {{ _('orders') }}
             </button>
-            <button onclick="switchTab('broadcast')" id="nav-broadcast" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-slate-800 hover:text-white transition font-bold">
+            <button data-action="switchTab" data-tab="broadcast" id="nav-broadcast" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-slate-800 hover:text-white transition font-bold">
                 <span>📢</span> {{ _('broadcast') }}
             </button>
-            <button onclick="switchTab('settings')" id="nav-settings" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-slate-800 hover:text-white transition font-bold">
+            <button data-action="switchTab" data-tab="settings" id="nav-settings" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-slate-800 hover:text-white transition font-bold">
                 <span>⚙️</span> {{ _('settings') }}
             </button>
         </div>
@@ -89,7 +89,7 @@
             </div>
             
             <div class="flex items-center gap-2">
-                <button id="systemAiToggleBtn" onclick="toggleSystemAI({{ store.id }}, event)" class="text-[10px] font-bold px-3 py-1.5 rounded border {% if store.ai_enabled %}bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100{% else %}bg-slate-50 text-slate-500 border-slate-200 hover:bg-slate-100{% endif %} transition whitespace-nowrap">
+                <button id="systemAiToggleBtn" data-action="toggleAI" data-store-id="{{ store.id }}" class="text-[10px] font-bold px-3 py-1.5 rounded border {% if store.ai_enabled %}bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100{% else %}bg-slate-50 text-slate-500 border-slate-200 hover:bg-slate-100{% endif %} transition whitespace-nowrap">
                     {% if store.ai_enabled %}🤖 Disable AI{% else %}❌ Enable AI{% endif %}
                 </button>
                 <script>
@@ -278,7 +278,7 @@
                                  data-id="{{ conv.id }}" data-userid="{{ conv.user_id }}" data-telegram="{{ conv.user.telegram_id }}" 
                                  data-name="{{ conv.user.first_name }}" data-human="{{ 'true' if conv.requires_human else 'false' }}"
                                  data-phone="{{ conv.user.phone or '' }}" data-timestamp="{{ ts }}" data-lead="{{ conv.lead_status }}"
-                                 onclick="openChat('{{ store.id }}', '{{ conv.user_id }}', '{{ conv.user.telegram_id }}', '{{ conv.user.first_name }}', {{ 'true' if conv.requires_human else 'false' }})">
+                                 data-action="openChat" data-store-id="{{ store.id }}" data-user-id="{{ conv.user_id }}" data-telegram-id="{{ conv.user.telegram_id }}" data-name="{{ conv.user.first_name }}" data-human="{{ \'true\' if conv.requires_human else \'false\' }}">
                                  
                                 <div class="flex justify-between items-center mb-1">
                                     <div class="font-bold text-slate-800 truncate pr-2 flex items-center gap-2">
