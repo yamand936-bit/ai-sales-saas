@@ -951,58 +951,7 @@
             
             container.scrollIntoView({ behavior: 'smooth' });
         }
-            toggleForm.action = `/merchant/${storeId}/toggle_ai/${userId}`;
-            
-            if (requiresHuman) {
-                document.getElementById('activeChatStatus').innerHTML = '<span class="text-red-500">تدخل بشري معلق 🔴</span>';
-                aiBtn.className = "text-xs font-bold px-4 py-2 rounded-lg transition shadow-sm border bg-green-50 text-green-700 border-green-200 hover:bg-green-100";
-                aiBtn.innerText = "▶️ تفعيل AI";
-            } else {
-                document.getElementById('activeChatStatus').innerHTML = '<span class="text-green-600">{{ _('ai_active_btn') }}</span>';
-                aiBtn.className = "text-xs font-bold px-4 py-2 rounded-lg transition shadow-sm border bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100";
-                aiBtn.innerText = "⏸️ إيقاف AI مؤقتاً";
-            }
 
-            // Fetch Messages via AJAX (Pagination mechanism for limits)
-            const canvas = document.getElementById('chatCanvas');
-            canvas.innerHTML = '<div class="text-center text-slate-400 mt-10">جاري تحميل الرسائل...</div>';
-            
-            try {
-                const res = await fetch(`/api/merchant/${storeId}/messages/${userId}?page=1`);
-                const responsePayload = await res.json();
-                
-                // Fix API RESPONSE HANDLING: handle standard payload or wrapped {data: [...]} 
-                let msgArray = responsePayload?.data?.messages || responsePayload?.messages || responsePayload?.data || [];
-                if (!Array.isArray(msgArray)) msgArray = [];
-                
-                canvas.innerHTML = '';
-                
-                // Add NULL SAFETY (optional chaining map/forEach)
-                msgArray?.forEach(msg => {
-                    const isAi = msg?.role === 'assistant';
-                    const content = msg?.content || '';
-                    const bubble = document.createElement('div');
-                    bubble.className = `max-w-[80%] p-4 rounded-xl text-sm shadow-sm relative ${
-                        isAi ? 'bg-white border border-slate-100 self-start rounded-tr-none text-slate-800' 
-                             : 'bg-primary text-white self-end rounded-tl-none'
-                    }`;
-                    bubble.innerHTML = `
-                        <p class="leading-relaxed whitespace-pre-wrap">${content}</p>
-                        <span class="text-[10px] absolute -bottom-4 right-1 opacity-50 text-slate-500">${msg?.time || 'now'}</span>
-                    `;
-                    canvas.appendChild(bubble);
-                });
-                
-                if(msgArray.length === 0) {
-                     canvas.innerHTML = '<div class="text-center text-slate-400 mt-10">لا توجد رسائل سابقة.</div>';
-                }
-                
-                // Scroll to bottom natively
-                canvas.scrollTop = canvas.scrollHeight;
-            } catch(e) {
-                canvas.innerHTML = '<div class="text-center text-red-500">حدث خطأ في جلب الشبكة.</div>';
-            }
-        }
 
         // Submit Reply form via AJAX
         async function submitReply(event, forceAction = 'reply') {
