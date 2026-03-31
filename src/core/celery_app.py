@@ -6,14 +6,13 @@ import sentry_sdk
 from sentry_sdk.integrations.flask import FlaskIntegration
 from sentry_sdk.integrations.celery import CeleryIntegration
 
-sentry_dsn = os.getenv("SENTRY_DSN", "")
-if sentry_dsn:
-    sentry_sdk.init(
-        dsn=sentry_dsn,
-        integrations=[FlaskIntegration(), CeleryIntegration()],
-        traces_sample_rate=1.0,
-        profiles_sample_rate=1.0,
-    )
+sentry_sdk.init(
+    dsn=os.getenv("SENTRY_DSN"),
+    integrations=[FlaskIntegration(), CeleryIntegration()],
+    traces_sample_rate=1.0,
+    profiles_sample_rate=1.0,
+    send_default_pii=True,
+)
 
 logger = logging.getLogger(__name__)
 
