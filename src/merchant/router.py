@@ -421,7 +421,8 @@ def inventory():
         return redirect("/inventory")
         
     products = MerchantService.get_products(store_id)
-    return render_template("inventory.html", products=products)
+    store = MerchantService.get_store(store_id)
+    return render_template("inventory.html", products=products, store=store)
 
 # ================================
 # CHECKOUT ROUTE
