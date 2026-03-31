@@ -1,6 +1,9 @@
 import os
 import datetime
 import json
+from pydantic import ValidationError
+from src.admin.schemas import StoreCreate, SystemSettingUpdate
+
 from flask import Blueprint, jsonify, render_template, request, redirect, flash, session
 from werkzeug.security import generate_password_hash
 
@@ -47,24 +50,22 @@ def admin_login_as(store_id):
 @admin_required
 def admin_stores():
     if request.method == "POST":
-        name = request.form.get("name")
-        owner_name = request.form.get("owner_name")
-        owner_email = request.form.get("owner_email")
-        password = request.form.get("password")
-        plan_price = float(request.form.get("plan_price") or 0.0)
-        token_limit = int(request.form.get("monthly_token_limit") or 100000)
-        
-        data = {
-            "name": name,
-            "owner_name": owner_name,
-            "owner_email": owner_email,
-            "password_hash": generate_password_hash(password),
-            "plan_price": plan_price,
-            "monthly_token_limit": token_limit,
-            "status": "active"
-        }
-        AdminService.create_store(data)
-        flash("Store licensed successfully", "success")
+        try:
+            data = request.form.to_dict()
+            data['plan_price'] = float(data.get('plan_price') or 0.0)
+            data['monthly_token_limit'] = int(data.get('monthly_token_limit') or 100000)
+            
+            validated = StoreCreate(**data)
+            store_data = validated.model_dump()
+            store_data["password_hash"] = generate_password_hash(store_data.pop("password"))
+            store_data["status"] = "active"
+            
+            AdminService.create_store(store_data)
+            flash("Store licensed successfully", "success")
+        except ValidationError as e:
+            flash(f"Validation Error: {e.errors()[0]['msg']}", "error")
+        except ValueError:
+            flash("Validation Error: Invalid numeric field in store creation", "error")
         return redirect("/admin/stores")
         
     stores = AdminService.get_all_stores()
@@ -74,15 +75,18 @@ def admin_stores():
 @admin_required
 def admin_settings():
     if request.method == "POST":
-        key = request.form.get("key", "").strip()
-        value = request.form.get("value", "").strip()
-
-        if key.endswith("_limit") and not value.isdigit():
-            flash(get_t(session.get("lang")).get("numeric_limit_err", "Error"), "error")
-            return redirect("/admin/settings")
-
-        AdminService.update_system_settings({key: value})
-        flash(get_t(session.get("lang")).get("settings_saved_success", "Success"), "success")
+        try:
+            data = request.form.to_dict()
+            validated = SystemSettingUpdate(**data)
+            
+            if validated.key.endswith("_limit") and not validated.value.isdigit():
+                flash(get_t(session.get("lang")).get("numeric_limit_err", "Error"), "error")
+                return redirect("/admin/settings")
+                
+            AdminService.update_system_settings({validated.key: validated.value})
+            flash(get_t(session.get("lang")).get("settings_saved_success", "Success"), "success")
+        except ValidationError as e:
+            flash(f"Validation error: {e.errors()[0]['msg']}", "error")
         return redirect("/admin/settings")
 
     settings_list = AdminService.get_system_settings()

@@ -1,5 +1,9 @@
 from werkzeug.security import check_password_hash
 from src.api.middlewares import merchant_required
+from pydantic import ValidationError
+from src.products.schemas import ProductCreate
+from src.merchant.schemas import AIConfigUpdate
+
 from flask import Blueprint, request, jsonify, render_template, redirect, session, flash, current_app, Response
 from sqlalchemy import func
 import json
@@ -71,13 +75,17 @@ def update_settings(store_id):
     if store_id != session.get("store_id"): return "Forbidden", 403
     store = MerchantService.get_store(store_id)
     if store:
-        data = {
-            "ai_mode": request.form.get("ai_mode", getattr(store, "ai_mode", "off")),
-            "ai_tone": request.form.get("ai_tone", getattr(store, "ai_tone", "friendly")),
-            "policy": request.form.get("policy", getattr(store, "policy", ""))
-        }
-        MerchantService.update_ai_config(store_id, data)
-        flash("Settings saved!", "success")
+        try:
+            data = request.form.to_dict()
+            if not data.get("ai_mode"): data["ai_mode"] = getattr(store, "ai_mode", "off")
+            if not data.get("ai_tone"): data["ai_tone"] = getattr(store, "ai_tone", "friendly")
+            if not data.get("policy"): data["policy"] = getattr(store, "policy", "")
+            
+            validated = AIConfigUpdate(**data)
+            MerchantService.update_ai_config(store_id, validated.model_dump())
+            flash("Settings saved!", "success")
+        except ValidationError as e:
+            flash(f"Validation Error: {e.errors()[0]['msg']}", "error")
     return redirect("/dashboard")
 
 @merchant_bp.route("/merchant/<int:store_id>/broadcast", methods=["POST"])
