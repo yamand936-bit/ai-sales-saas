@@ -240,6 +240,18 @@
                                  <div class="w-full bg-slate-100 rounded-full h-2"><div class="bg-green-500 h-2 rounded-full" style="width: {% if avg_latency|int < 2000 %}100%{%else%}50%{%endif%}"></div></div>
                              </div>
                              <div>
+                                 <div class="flex justify-between text-sm mb-2"><span class="text-slate-500 font-bold">Daily Requests</span><span class="font-black text-blue-600">{{ total_ai_requests }}</span></div>
+                             </div>
+                             <div>
+                                 <div class="flex justify-between text-sm mb-2"><span class="text-slate-500 font-bold">Total Est. Cost</span><span class="font-black text-red-600">${{ total_cost }}</span></div>
+                             </div>
+                             <div>
+                                 <div class="flex justify-between text-sm mb-2">
+                                     <span class="text-slate-500 font-bold">Node Health</span>
+                                     <span class="text-xs font-black px-2 py-0.5 rounded-md {% if ai_success_rate > 90 %}bg-green-100 text-green-700{% else %}bg-orange-100 text-orange-700{% endif %} border">{{ ai_success_rate }}% Success</span>
+                                 </div>
+                             </div>
+                             <div class="mt-4 pt-4 border-t border-slate-100">
                                  <div class="flex justify-between text-sm mb-2"><span class="text-slate-500 font-bold">{{ _('redis_conn_status') }}</span><span class="font-black text-primary">{{ _('connected_dot') }}</span></div>
                              </div>
                          </div>

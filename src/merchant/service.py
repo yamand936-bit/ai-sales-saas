@@ -43,9 +43,43 @@ class MerchantService:
             monthly_token_limit = store.monthly_token_limit or 100000
             token_warning = total_tokens >= (monthly_token_limit * 0.8)
             
-            # Latency Fake/Calc
+            # Realtime AI Metrics (Redis)
             avg_latency = 450
-            
+            total_cost = 0.0
+            total_ai_requests = 0
+            try:
+                import redis
+                from src.core.config import settings
+                r = redis.from_url(settings.REDIS_URL, decode_responses=True)
+                
+                # Dynamic Latency
+                latencies = r.lrange(f"ai:metrics:latency:store:{store.id}", 0, 99)
+                if latencies:
+                    avg_latency = sum(int(l) for l in latencies) // len(latencies)
+                
+                # Dynamic Cost
+                cost_val = r.get(f"ai:metrics:cost:store:{store.id}")
+                if cost_val: total_cost = round(float(cost_val), 4)
+                
+                # Daily AI Requests (realtime)
+                today = __import__('time').strftime("%Y-%m-%d")
+                ai_reqs = r.get(f"ai:metrics:requests:store:{store.id}")
+                if ai_reqs: total_ai_requests = int(ai_reqs)
+                
+                # Success/Failure Rates (Global node health)
+                global_success = int(r.get(f"ai:openai:success") or 0) + int(r.get(f"ai:gemini:success") or 0)
+                global_retry = int(r.get(f"ai:openai:retry") or 0) + int(r.get(f"ai:gemini:retry") or 0)
+                global_failure = int(r.get(f"ai:openai:failure") or 0) + int(r.get(f"ai:gemini:failure") or 0)
+                
+                total_attempts = global_success + global_retry + global_failure
+                success_rate = round((global_success / total_attempts) * 100, 1) if total_attempts > 0 else 100.0
+                failure_rate = round(((global_retry + global_failure) / total_attempts) * 100, 1) if total_attempts > 0 else 0.0
+                
+            except Exception as e:
+                success_rate = 100.0
+                failure_rate = 0.0
+                import logging
+                logging.getLogger(__name__).warning("Redis metrics unavailable: " + str(e))
             # Lists for CRM / Inventory / Orders
             try:
                 conversations = db.query(Conversation).join(User).filter(User.store_id == store.id).order_by(Conversation.created_at.desc()).all()
@@ -167,6 +201,10 @@ class MerchantService:
                 "conversion_rate": conversion_rate,
                 "total_tokens": total_tokens,
                 "avg_latency": avg_latency,
+                "total_cost": total_cost,
+                "total_ai_requests": total_ai_requests,
+                "ai_success_rate": success_rate,
+                "ai_failure_rate": failure_rate,
                 "ai_interactions": ai_interactions,
                 "chart_dates": json.dumps(chart_dates),
                 "chart_tokens": json.dumps(chart_tokens),

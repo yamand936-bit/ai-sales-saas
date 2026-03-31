@@ -3,6 +3,7 @@ import logging
 import json
 import requests
 import hashlib
+import redis
 from abc import ABC, abstractmethod
 from openai import OpenAI
 from src.core.config import settings
@@ -163,6 +164,32 @@ class AIRouter:
             self._record_metric(provider, "failure")
         except: pass
 
+    def _record_store_metrics(self, store_id: int, provider: str, model: str, tokens: int, cost: float, latency: int):
+        if not self.redis_client: return
+        try:
+            today = time.strftime("%Y-%m-%d")
+            pipe = self.redis_client.pipeline()
+            # Request Tracking
+            pipe.incr(f"ai:metrics:requests:total")
+            pipe.incr(f"ai:metrics:requests:store:{store_id}")
+            pipe.incr(f"ai:metrics:requests:model:{model}")
+            
+            # Token Tracking
+            pipe.incrby(f"ai:metrics:tokens:store:{store_id}", tokens)
+            pipe.incrby(f"ai:metrics:tokens:day:{today}", tokens)
+            
+            # Cost Tracking
+            pipe.incrbyfloat(f"ai:metrics:cost:store:{store_id}", cost)
+            pipe.incrbyfloat(f"ai:metrics:cost:day:{today}", cost)
+            pipe.incrbyfloat(f"ai:metrics:cost:total", cost)
+            
+            # Latency Tracking (Rolling window of last 100)
+            pipe.lpush(f"ai:metrics:latency:store:{store_id}", latency)
+            pipe.ltrim(f"ai:metrics:latency:store:{store_id}", 0, 99)
+            
+            pipe.execute()
+        except: pass
+
     def _is_degraded(self, provider: str) -> bool:
         if not self.redis_client: return False
         try:
@@ -194,7 +221,26 @@ class AIRouter:
             
         return best, model_name
 
-    def route_request(self, messages: list, is_json: bool, is_complex: bool, is_downgraded: bool, **kwargs) -> str:
+    def route_request(self, store_id: int, messages: list, is_json: bool, is_complex: bool, is_downgraded: bool, **kwargs) -> str:
+        # Rate Limiting
+        if store_id and self.redis_client:
+            try:
+                rpm_key = f"rate_limit:rpm:{store_id}"
+                current_rpm = self.redis_client.incr(rpm_key)
+                if current_rpm == 1:
+                    self.redis_client.expire(rpm_key, 60)
+                if current_rpm > 100:
+                    logger.warning(f"[RATE LIMIT] Store {store_id} exceeded 100 requests per minute.")
+                    raise AIRetryException("Rate limit exceeded. Please slow down.", retry_after=60)
+                
+                # Check daily token limits broadly (assumed 500k global fallback check if DB lags)
+                today = time.strftime("%Y-%m-%d")
+                daily_tokens = self.redis_client.get(f"ai:metrics:tokens:day:{today}:{store_id}")
+                if daily_tokens and int(daily_tokens) > 500000:
+                    logger.warning(f"[RATE LIMIT] Store {store_id} exceeded daily token envelope.")
+                    raise AIRetryException("Daily token limit reached.")
+            except redis.exceptions.RedisError: pass
+
         # Caching Layer Check
         cached = self._get_cache(messages)
         if cached:
@@ -207,9 +253,23 @@ class AIRouter:
         delays = [2, 5, 10]
         current_provider = best_provider
         
+        start_time = time.time()
+        
         for attempt in range(max_retries):
             try:
                 res = current_provider.generate(target_model, messages, is_json, **kwargs)
+                
+                latency = int((time.time() - start_time) * 1000)
+                if latency > 3000:
+                    logger.warning(f"[AI SLOW] Provider {current_provider.name} | Model {target_model} | Latency {latency}ms")
+                    
+                # Rough offline token estimation (real APIs stream usage dicts)
+                tokens_used = len(str(messages)) // 4 + len(res) // 4
+                cost = (tokens_used / 1000) * 0.015 # Blended avg cost
+                
+                if store_id:
+                    self._record_store_metrics(store_id, current_provider.name, target_model, tokens_used, cost, latency)
+                
                 logger.info(f"[AI SUCCESS] Provider {current_provider.name} | Model {target_model}")
                 self._record_metric(current_provider.name, "success")
                 self._set_cache(messages, res)
@@ -241,6 +301,17 @@ class AIRouter:
             
             try:
                 res = fallback.generate(fb_model, messages, is_json, **kwargs)
+                
+                latency = int((time.time() - start_time) * 1000)
+                if latency > 3000:
+                    logger.warning(f"[AI SLOW] Fallback {fallback.name} | Model {fb_model} | Latency {latency}ms")
+                    
+                tokens_used = len(str(messages)) // 4 + len(res) // 4
+                cost = (tokens_used / 1000) * 0.015
+                
+                if store_id:
+                    self._record_store_metrics(store_id, fallback.name, fb_model, tokens_used, cost, latency)
+                    
                 logger.info(f"[AI SUCCESS] Fallback Provider {fallback.name} succeeded")
                 self._record_metric(fallback.name, "success")
                 self._set_cache(messages, res)
@@ -283,10 +354,12 @@ class AIEngineService:
         else:
             messages.append({"role": "user", "content": message})
 
+        store_id = context.get("store_id", 0)
         is_complex = self._determine_complexity(message, context)
         is_downgraded = context.get("is_downgraded", False)
 
         return self.router.route_request(
+            store_id=store_id,
             messages=messages, 
             is_json=False, 
             is_complex=is_complex, 
@@ -309,10 +382,12 @@ class AIEngineService:
         else:
             messages.append({"role": "user", "content": message})
 
+        store_id = context.get("store_id", 0)
         is_complex = self._determine_complexity(message, context)
         is_downgraded = context.get("is_downgraded", False)
 
         return self.router.route_request(
+            store_id=store_id,
             messages=messages, 
             is_json=True, 
             is_complex=is_complex, 
