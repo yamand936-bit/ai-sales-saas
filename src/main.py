@@ -335,7 +335,7 @@ def inventory():
 def admin_login():
     if request.method == "POST":
         password = request.form.get("password")
-        if password == "superadmin123":  # Ideally moved to env vars
+        if password == os.getenv("SUPERADMIN_PASSWORD"):
             session.permanent = True
             session["role"] = "admin"
             session["is_admin"] = True
