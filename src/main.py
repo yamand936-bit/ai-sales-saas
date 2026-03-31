@@ -33,7 +33,9 @@ Base.metadata.create_all(bind=engine)
 app = Flask(__name__, template_folder='templates')
 init_settings()
 
-app.secret_key = "super_secret_enterprise_key"
+app.secret_key = os.getenv("FLASK_SECRET_KEY")
+if not app.secret_key:
+    raise ValueError("FLASK_SECRET_KEY not set")
 app.permanent_session_lifetime = datetime.timedelta(days=7)
 
 from src.merchant.router import merchant_bp
