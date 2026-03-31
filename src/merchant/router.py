@@ -70,18 +70,16 @@ def delete_product(store_id, product_id):
 @merchant_required
 def update_settings(store_id):
     if store_id != session.get("store_id"): return "Forbidden", 403
-    db = SessionLocal()
-    try:
-        store = MerchantService.get_store(store_id)
-        if store:
-            store.ai_mode = request.form.get("ai_mode", store.ai_mode)
-            store.ai_tone = request.form.get("ai_tone", store.ai_tone)
-            store.policy = request.form.get("policy", store.policy)
-            db.commit()
-            flash("Settings saved!", "success")
-        return redirect("/dashboard")
-    finally:
-        db.close()
+    store = MerchantService.get_store(store_id)
+    if store:
+        data = {
+            "ai_mode": request.form.get("ai_mode", getattr(store, "ai_mode", "off")),
+            "ai_tone": request.form.get("ai_tone", getattr(store, "ai_tone", "friendly")),
+            "policy": request.form.get("policy", getattr(store, "policy", ""))
+        }
+        MerchantService.update_ai_config(store_id, data)
+        flash("Settings saved!", "success")
+    return redirect("/dashboard")
 
 @merchant_bp.route("/merchant/<int:store_id>/broadcast", methods=["POST"])
 @merchant_required
@@ -195,16 +193,12 @@ def toggle_ai(store_id, user_id):
 @merchant_required
 def toggle_system_ai(store_id):
     if store_id != session.get("store_id"): return jsonify({"error": "Forbidden"}), 403
-    db = SessionLocal()
-    try:
-        store = MerchantService.get_store(store_id)
-        if store:
-            store.ai_enabled = not store.ai_enabled
-            db.commit()
-            return jsonify({"status": "success", "ai_enabled": store.ai_enabled})
-        return jsonify({"error": "Store not found"}), 404
-    finally:
-        db.close()
+    store = MerchantService.get_store(store_id)
+    if store:
+        ai_enabled = not getattr(store, "ai_enabled", False)
+        MerchantService.update_ai_config(store_id, {"ai_enabled": ai_enabled})
+        return jsonify({"status": "success", "ai_enabled": ai_enabled})
+    return jsonify({"error": "Store not found"}), 404
 
 @merchant_bp.route("/merchant/<int:store_id>/reply/<telegram_id>", methods=["POST"])
 @merchant_required

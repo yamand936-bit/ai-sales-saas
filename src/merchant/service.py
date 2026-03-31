@@ -335,3 +335,38 @@ class MerchantService:
             ).first()
         finally:
             db.close()
+
+    @staticmethod
+    def get_ai_config(store_id: int):
+        db = SessionLocal()
+        try:
+            store = db.query(Store).filter_by(id=store_id).first()
+            if not store:
+                return None
+            return {
+                "telegram_token": store.telegram_token,
+                "whatsapp_token": store.whatsapp_token,
+                "instagram_token": store.instagram_token,
+                "ai_model": store.ai_model,
+                "ai_enabled": store.ai_enabled,
+            }
+        finally:
+            db.close()
+
+    @staticmethod
+    def update_ai_config(store_id: int, data: dict):
+        db = SessionLocal()
+        try:
+            store = db.query(Store).filter_by(id=store_id).first()
+            if not store:
+                return None
+
+            for key, value in data.items():
+                if hasattr(store, key):
+                    setattr(store, key, value)
+
+            db.commit()
+            db.refresh(store)
+            return store
+        finally:
+            db.close()
