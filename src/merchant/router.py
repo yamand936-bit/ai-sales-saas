@@ -13,6 +13,7 @@ from src.chat.models import Conversation, Message, AILog
 from src.users.models import User
 from src.utils.i18n import get_t
 from src.core.config import settings
+from src.merchant.service import MerchantService
 
 merchant_bp = Blueprint('merchant', __name__)
 
@@ -462,7 +463,6 @@ def login():
 @merchant_bp.route("/dashboard")
 @merchant_required
 def dashboard():
-    from src.merchant.service import MerchantService
     store_id = session.get("store_id")
     data = MerchantService.get_dashboard(store_id)
     if not data:
