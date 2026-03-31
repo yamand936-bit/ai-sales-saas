@@ -347,7 +347,7 @@ class MerchantService:
                 "telegram_token": store.telegram_token,
                 "whatsapp_token": store.whatsapp_token,
                 "instagram_token": store.instagram_token,
-                "ai_model": store.ai_model,
+                "ai_mode": store.ai_mode,
                 "ai_enabled": store.ai_enabled,
             }
         finally:

@@ -8,3 +8,7 @@ celery
 redis
 psycopg2-binary
 pydantic
+pytest
+pytest-cov
+pytest
+pytest-cov
