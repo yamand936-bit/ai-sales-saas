@@ -256,3 +256,31 @@ class MerchantService:
             return order
         finally:
             db.close()
+
+    @staticmethod
+    def get_conversations(store_id: int):
+        db = SessionLocal()
+        try:
+            return db.query(Conversation).join(User).filter(User.store_id == store_id).order_by(Conversation.updated_at.desc()).all()
+        finally:
+            db.close()
+
+    @staticmethod
+    def get_messages(conversation_id: int):
+        db = SessionLocal()
+        try:
+            return db.query(Message).filter_by(conversation_id=conversation_id).order_by(Message.timestamp).all()
+        finally:
+            db.close()
+
+    @staticmethod
+    def add_message(conversation_id: int, role: str, content: str):
+        db = SessionLocal()
+        try:
+            msg = Message(conversation_id=conversation_id, role=role, content=content)
+            db.add(msg)
+            db.commit()
+            db.refresh(msg)
+            return msg
+        finally:
+            db.close()

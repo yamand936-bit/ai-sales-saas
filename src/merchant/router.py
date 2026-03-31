@@ -8,7 +8,7 @@ import datetime
 from src.core.database import SessionLocal
 from src.stores.models import Store
 from src.products.models import Product
-from src.chat.models import Conversation, Message, AILog
+from src.chat.models import AILog
 from src.users.models import User
 from src.utils.i18n import get_t
 from src.core.config import settings
@@ -122,10 +122,11 @@ def get_messages(store_id, user_id):
     try:
         user = db.query(User).filter_by(id=user_id, store_id=store_id).first()
         if not user: return jsonify({"messages": []})
-        conv = db.query(Conversation).filter_by(user_id=user_id).first()
+        all_c = MerchantService.get_conversations(getattr(store, 'id', session.get('store_id')))
+        conv = next((c for c in all_c if c.user_id == user_id), None)
         if not conv:
             return jsonify({"messages": []})
-        msgs = db.query(Message).filter_by(conversation_id=conv.id).order_by(Message.timestamp).all()
+        msgs = MerchantService.get_messages(conv.id)
         return jsonify({"messages": [{"role": m.role, "content": m.content, "time": m.timestamp.strftime('%H:%M')} for m in msgs[-50:]]})
     finally:
         db.close()
@@ -140,11 +141,12 @@ def merchant_conversations_endpoint():
     try:
         users = db.query(User).filter_by(store_id=store_id).all()
         user_ids = [u.id for u in users]
-        convs = db.query(Conversation).filter(Conversation.user_id.in_(user_ids)).all()
+        convs = MerchantService.get_conversations(store_id)
         
         data = []
         for conv in convs:
-            last_msg = db.query(Message).filter_by(conversation_id=conv.id).order_by(Message.timestamp.desc()).first()
+            msgs = MerchantService.get_messages(conv.id)
+            last_msg = msgs[-1] if msgs else None
             data.append({
                 "user_id": conv.user_id,
                 "name": conv.user.first_name,
@@ -182,7 +184,8 @@ def toggle_ai(store_id, user_id):
     try:
         user = db.query(User).filter_by(id=user_id, store_id=store_id).first()
         if not user: return redirect("/dashboard")
-        conv = db.query(Conversation).filter_by(user_id=user_id).first()
+        all_c = MerchantService.get_conversations(getattr(store, 'id', session.get('store_id')))
+        conv = next((c for c in all_c if c.user_id == user_id), None)
         if conv:
             conv.requires_human = not conv.requires_human
             db.commit()
@@ -220,13 +223,14 @@ def merchant_reply(store_id, telegram_id):
         action_val = request.form.get("action_val")
         reply_msg = request.form.get("reply_msg")
         
-        conv = db.query(Conversation).filter_by(user_id=user.id).first()
+        all_c = MerchantService.get_conversations(getattr(store, 'id', session.get('store_id')))
+        conv = next((c for c in all_c if c.user_id == user.id), None)
         
         if reply_msg:
             send_telegram_msg(store.telegram_token, telegram_id, reply_msg)
             if conv:
-                new_msg = Message(conversation_id=conv.id, role="assistant", content=reply_msg)
-                db.add(new_msg)
+                new_msg = MerchantService.add_message(conversation_id=conv.id, role="assistant", content=reply_msg)
+                
                 
         if action_val == 'resolve' and conv:
             conv.requires_human = False
@@ -299,7 +303,7 @@ def auto_followup(store_id):
         delay_mins = max(30, delay_mins) # Task 2: minimum 30 minutes cooldown
         cutoff_time = datetime.datetime.utcnow() - datetime.timedelta(minutes=delay_mins)
 
-        conversations = db.query(Conversation).join(User).filter(User.store_id == store.id).all()
+        conversations = MerchantService.get_conversations(store.id)
         follow_ups_sent = 0
 
         for conv in conversations:
@@ -313,7 +317,7 @@ def auto_followup(store_id):
                 logger.info(f"AFU Skip Conv {conv.id}: Already followed up.")
                 continue
                 
-            msgs = db.query(Message).filter_by(conversation_id=conv.id).order_by(Message.timestamp).all()
+            msgs = MerchantService.get_messages(conv.id)
             
             # Task 2: conversation has at least 2 messages
             if len(msgs) < 2:
@@ -365,8 +369,8 @@ def auto_followup(store_id):
             logger.info(f"PERFORMANCE: follow_up_sent for Conv {conv.id}")
             logger.info(f"AFU Triggered Conv {conv.id}: Sent follow-up -> {reply}")
 
-            msg_ai = Message(conversation_id=conv.id, role="assistant", content=reply)
-            db.add(msg_ai)
+            msg_ai = MerchantService.add_message(conversation_id=conv.id, role="assistant", content=reply)
+            
             
             ctx["auto_followed_up_at"] = datetime.datetime.utcnow().isoformat()
             ctx["follow_up_sent"] = True
