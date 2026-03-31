@@ -52,6 +52,12 @@ init_settings()
 app.secret_key = os.getenv("FLASK_SECRET_KEY")
 if not app.secret_key:
     raise ValueError("FLASK_SECRET_KEY not set")
+
+app.config.update(
+    SESSION_COOKIE_SECURE=True,
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE='Lax'
+)
 app.permanent_session_lifetime = datetime.timedelta(days=7)
 
 from src.merchant.router import merchant_bp

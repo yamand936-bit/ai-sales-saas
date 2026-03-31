@@ -216,9 +216,16 @@ def merchant_stream(store_id):
     if store_id != session.get("store_id"): return "Forbidden", 403
     def generate():
         import time
+        max_beats = 240
+        beats = 0
         while True:
-            yield "data: {\"type\": \"heartbeat\"}\n\n"
-            time.sleep(15)
+            try:
+                yield "data: {\"type\": \"heartbeat\"}\n\n"
+                time.sleep(15)
+                beats += 1
+                if beats >= max_beats: break
+            except GeneratorExit:
+                break
     return Response(generate(), mimetype="text/event-stream")
 
 @merchant_bp.route("/api/preview_ai", methods=["POST"])
