@@ -236,10 +236,20 @@ class MerchantService:
             db.close()
 
     @staticmethod
+    def get_order(order_id: int):
+        db = SessionLocal()
+        try:
+            return db.query(Order).filter_by(id=order_id).first()
+        finally:
+            db.close()
+
+    @staticmethod
     def update_order_status(order_id: int, status: str):
         db = SessionLocal()
         try:
-            order = db.query(Order).get(order_id)
+            order = db.query(Order).filter_by(id=order_id).first()
+            if not order:
+                return None
             order.status = status
             db.commit()
             db.refresh(order)

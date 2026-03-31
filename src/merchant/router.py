@@ -8,7 +8,6 @@ import datetime
 from src.core.database import SessionLocal
 from src.stores.models import Store
 from src.products.models import Product
-from src.orders.models import Order
 from src.chat.models import Conversation, Message, AILog
 from src.users.models import User
 from src.utils.i18n import get_t
@@ -109,11 +108,10 @@ def send_broadcast(store_id):
 @merchant_required
 def approve_order(store_id, order_id):
     if store_id != session.get("store_id"): return "Forbidden", 403
-    try:
-        MerchantService.update_order_status(order_id, "paid")
-        flash("Order approved!", "success")
-    except Exception:
-        pass # Handle if order is None per simplified service
+    order = MerchantService.update_order_status(order_id, "paid")
+    if not order:
+        return "Order not found", 404
+    flash("Order approved!", "success")
     return redirect("/dashboard")
 
 @merchant_bp.route("/api/merchant/<int:store_id>/messages/<int:user_id>", methods=["GET"])
@@ -471,7 +469,7 @@ def inventory():
 def checkout(order_id):
     db = SessionLocal()
     try:
-        order = db.query(Order).filter_by(id=order_id).first()
+        order = MerchantService.get_order(order_id)
         if not order:
             return "Order not found", 404
         store = db.query(Store).filter_by(id=order.store_id).first()
