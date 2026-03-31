@@ -370,3 +370,42 @@ class MerchantService:
             return store
         finally:
             db.close()
+
+    @staticmethod
+    def toggle_conversation_human_mode(conv_id: int):
+        db = SessionLocal()
+        try:
+            conv = db.query(Conversation).filter_by(id=conv_id).first()
+            if not conv:
+                return None
+            conv.requires_human = not conv.requires_human
+            db.commit()
+            return conv
+        finally:
+            db.close()
+
+    @staticmethod
+    def resolve_conversation(conv_id: int):
+        db = SessionLocal()
+        try:
+            conv = db.query(Conversation).filter_by(id=conv_id).first()
+            if not conv:
+                return None
+            conv.requires_human = False
+            db.commit()
+            return conv
+        finally:
+            db.close()
+
+    @staticmethod
+    def update_conversation_context(conv_id: int, context: str):
+        db = SessionLocal()
+        try:
+            conv = db.query(Conversation).filter_by(id=conv_id).first()
+            if not conv:
+                return None
+            conv.context = context
+            db.commit()
+            return conv
+        finally:
+            db.close()
