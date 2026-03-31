@@ -284,3 +284,27 @@ class MerchantService:
             return msg
         finally:
             db.close()
+
+    @staticmethod
+    def get_store(store_id: int):
+        db = SessionLocal()
+        try:
+            return db.query(Store).filter_by(id=store_id).first()
+        finally:
+            db.close()
+
+    @staticmethod
+    def get_store_by_domain(domain: str):
+        db = SessionLocal()
+        try:
+            return db.query(Store).filter_by(domain=domain).first()
+        finally:
+            db.close()
+
+    @staticmethod
+    def get_store_by_email(email: str):
+        db = SessionLocal()
+        try:
+            return db.query(Store).filter_by(owner_email=email).first()
+        finally:
+            db.close()
