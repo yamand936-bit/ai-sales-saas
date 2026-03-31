@@ -23,69 +23,51 @@ merchant_bp = Blueprint('merchant', __name__)
 @merchant_required
 def add_product(store_id):
     if store_id != session.get("store_id"): return "Forbidden", 403
-    db = SessionLocal()
-    try:
-        name = request.form.get("name")
-        price = float(request.form.get("price", 0))
-        desc = request.form.get("description")
-        image_url = request.form.get("image_url")
-        category = request.form.get("category")
-        is_service = request.form.get("is_service") == "on"
-        booking_link = request.form.get("booking_link", "")
-        
-        type_val = request.form.get("type", "product")
-        duration = request.form.get("duration")
-        duration = int(duration) if duration else None
-        
-        product = Product(
-            store_id=store_id, 
-            name=name, 
-            price=price, 
-            description=desc, 
-            image_url=image_url, 
-            category=category, 
-            sizes="{}",
-            is_service=is_service,
-            booking_link=booking_link,
-            type=type_val,
-            duration=duration
-        )
-        db.add(product)
-        db.commit()
-        flash("Product added", "success")
-        return redirect("/dashboard")
-    finally:
-        db.close()
+    name = request.form.get("name")
+    price = float(request.form.get("price", 0))
+    desc = request.form.get("description")
+    image_url = request.form.get("image_url")
+    category = request.form.get("category")
+    is_service = request.form.get("is_service") == "on"
+    booking_link = request.form.get("booking_link", "")
+    type_val = request.form.get("type", "product")
+    duration = request.form.get("duration")
+    duration = int(duration) if duration else None
+
+    data = {
+        "name": name, 
+        "price": price, 
+        "description": desc, 
+        "image_url": image_url, 
+        "category": category, 
+        "sizes": "{}",
+        "is_service": is_service,
+        "booking_link": booking_link,
+        "type": type_val,
+        "duration": duration
+    }
+    MerchantService.create_product(store_id, data)
+    flash("Product added", "success")
+    return redirect("/dashboard")
 
 @merchant_bp.route("/merchant/<int:store_id>/toggle_product/<int:product_id>", methods=["POST"])
 @merchant_required
 def toggle_product(store_id, product_id):
     if store_id != session.get("store_id"): return "Forbidden", 403
-    db = SessionLocal()
-    try:
-        product = db.query(Product).filter_by(id=product_id, store_id=store_id).first()
-        if product:
-            product.is_active = not product.is_active
-            db.commit()
-            flash("Product status updated", "success")
-        return redirect("/dashboard")
-    finally:
-        db.close()
+    products = MerchantService.get_products(store_id)
+    product = next((p for p in products if p.id == product_id), None)
+    if product:
+        MerchantService.update_product(product_id, {"is_active": not product.is_active})
+        flash("Product status updated", "success")
+    return redirect("/dashboard")
 
 @merchant_bp.route("/merchant/<int:store_id>/delete_product/<int:product_id>", methods=["POST"])
 @merchant_required
 def delete_product(store_id, product_id):
     if store_id != session.get("store_id"): return "Forbidden", 403
-    db = SessionLocal()
-    try:
-        product = db.query(Product).filter_by(id=product_id, store_id=store_id).first()
-        if product:
-            db.delete(product)
-            db.commit()
-            flash("Product deleted", "success")
-        return redirect("/dashboard")
-    finally:
-        db.close()
+    MerchantService.delete_product(product_id)
+    flash("Product deleted", "success")
+    return redirect("/dashboard")
 
 @merchant_bp.route("/merchant/<int:store_id>/settings", methods=["POST"])
 @merchant_required
@@ -473,23 +455,18 @@ def dashboard():
 @merchant_bp.route("/inventory", methods=["GET", "POST"])
 @merchant_required
 def inventory():
-    db = SessionLocal()
-    try:
-        if request.method == "POST":
-            # Add product logic
-            name = request.form.get("name")
-            price = float(request.form.get("price", 0))
-            desc = request.form.get("description")
-            product = Product(store_id=session["store_id"], name=name, price=price, desc_ai=desc)
-            db.add(product)
-            db.commit()
-            flash("Product added", "success")
-            return redirect("/inventory")
-            
-        products = db.query(Product).filter_by(store_id=session["store_id"]).all()
-        return render_template("inventory.html", products=products)
-    finally:
-        db.close()
+    store_id = session.get("store_id")
+    if request.method == "POST":
+        name = request.form.get("name")
+        price = float(request.form.get("price", 0))
+        desc = request.form.get("description")
+        data = {"name": name, "price": price, "desc_ai": desc}
+        MerchantService.create_product(store_id, data)
+        flash("Product added", "success")
+        return redirect("/inventory")
+        
+    products = MerchantService.get_products(store_id)
+    return render_template("inventory.html", products=products)
 
 # ================================
 # CHECKOUT ROUTE

@@ -183,3 +183,46 @@ class MerchantService:
             db.close()
     
     
+    @staticmethod
+    def get_products(store_id: int):
+        db = SessionLocal()
+        try:
+            return db.query(Product).filter(Product.store_id == store_id).all()
+        finally:
+            db.close()
+
+    @staticmethod
+    def create_product(store_id: int, data: dict):
+        db = SessionLocal()
+        try:
+            product = Product(**data, store_id=store_id)
+            db.add(product)
+            db.commit()
+            db.refresh(product)
+            return product
+        finally:
+            db.close()
+
+    @staticmethod
+    def update_product(product_id: int, data: dict):
+        db = SessionLocal()
+        try:
+            product = db.query(Product).get(product_id)
+            for key, value in data.items():
+                setattr(product, key, value)
+            db.commit()
+            db.refresh(product)
+            return product
+        finally:
+            db.close()
+
+    @staticmethod
+    def delete_product(product_id: int):
+        db = SessionLocal()
+        try:
+            product = db.query(Product).get(product_id)
+            db.delete(product)
+            db.commit()
+            return True
+        finally:
+            db.close()
