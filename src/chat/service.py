@@ -231,11 +231,13 @@ class ChatProcessingService:
             
             try:
                 from src.chat.models import AILog
+                pt = usage_info.get('prompt_tokens')
+                ct = usage_info.get('completion_tokens')
                 ai_log = AILog(
                     store_id=store.id,
                     conversation_id=conversation.id,
-                    prompt_tokens=usage_info.get('prompt_tokens') or (len(full_system_prompt) // 4 if full_system_prompt else 0),
-                    completion_tokens=usage_info.get('completion_tokens') or (len(reply) // 4 if reply else 0),
+                    prompt_tokens=pt if pt is not None else (len(full_system_prompt) // 4 if full_system_prompt else 0),
+                    completion_tokens=ct if ct is not None else (len(reply) // 4 if reply else 0),
                     processing_time_ms=processing_time_ms
                 )
                 db.add(ai_log)

@@ -162,7 +162,15 @@ class DecisionEngine:
             
             try:
                 ai_dict = json.loads(raw_reply)
-            except:
+            except Exception as e:
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.error(f"[ERROR] {e}", exc_info=True)
+                try:
+                    import sentry_sdk
+                    sentry_sdk.capture_exception(e)
+                except Exception:
+                    pass
                 ai_dict = {"reply": raw_reply, "intent": "none", "entities": {}}
                 
             safe_output = Guardrails.validate_ai_output(ai_dict)
@@ -261,7 +269,15 @@ class DecisionEngine:
                     sizes_dict = json.loads(p.sizes)
                     avail = [s for s, enabled in sizes_dict.items() if enabled]
                     p_text += f", مقاسات متوفرة: {', '.join(avail)}"
-                except: pass
+                except Exception as e:
+                    import logging
+                    logger = logging.getLogger(__name__)
+                    logger.error(f"[ERROR] {e}", exc_info=True)
+                    try:
+                        import sentry_sdk
+                        sentry_sdk.capture_exception(e)
+                    except Exception:
+                        pass
             prompt += p_text + "\n"
             
         prompt += "\nتعليمات صارمة للمخرجات:\n"

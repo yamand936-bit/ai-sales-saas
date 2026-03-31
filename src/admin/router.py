@@ -181,8 +181,15 @@ def admin_store_detail(store_id):
     if getattr(store, 'features_json', None):
         try:
             features_dict = json.loads(store.features_json)
-        except:
-            pass
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"[ERROR] {e}", exc_info=True)
+            try:
+                import sentry_sdk
+                sentry_sdk.capture_exception(e)
+            except Exception:
+                pass
 
     return render_template("admin_store_detail.html", 
                            store=store,

@@ -96,8 +96,15 @@ def process_telegram_webhook(self, token: str, update: dict):
         try:
             from src.chat.service import send_telegram_msg
             send_telegram_msg(token, str(user_id), "⚠️ النظام مشغول حالياً، يرجى المحاولة بعد لحظات | System is busy, please try again shortly")
-        except:
-            pass
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"[ERROR] {e}", exc_info=True)
+            try:
+                import sentry_sdk
+                sentry_sdk.capture_exception(e)
+            except Exception:
+                pass
     finally:
         print("TASK END")
 
@@ -153,8 +160,15 @@ def process_whatsapp_webhook(self, token: str, update: dict):
                 headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
                 payload = {"messaging_product": "whatsapp", "to": user_phone, "type": "text", "text": {"body": "⚠️ النظام مشغول حالياً، يرجى المحاولة بعد لحظات | System is busy, please try again shortly"}}
                 requests.post(url, headers=headers, json=payload)
-        except:
-            pass
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"[ERROR] {e}", exc_info=True)
+            try:
+                import sentry_sdk
+                sentry_sdk.capture_exception(e)
+            except Exception:
+                pass
 
 @celery.task(name="process_instagram_task", bind=True, max_retries=3)
 def process_instagram_webhook(self, token: str, update: dict):
@@ -202,6 +216,13 @@ def process_instagram_webhook(self, token: str, update: dict):
                 headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
                 payload = {"recipient": {"id": sender_id}, "message": {"text": "⚠️ النظام مشغول حالياً، يرجى المحاولة بعد لحظات | System is busy, please try again shortly"}}
                 requests.post(url, headers=headers, json=payload)
-        except:
-            pass
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"[ERROR] {e}", exc_info=True)
+            try:
+                import sentry_sdk
+                sentry_sdk.capture_exception(e)
+            except Exception:
+                pass
 
