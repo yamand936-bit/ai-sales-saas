@@ -131,11 +131,24 @@ class DecisionEngine:
                 db.commit()
                 
                 start_time = time.time()
+                # Check if store monthly tokens exceeded -> downgrade
+                from src.chat.models import AILog
+                from sqlalchemy import func
+                from datetime import datetime
+                current_month = datetime.utcnow().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+                tokens_used = db.query(func.sum(AILog.prompt_tokens + AILog.completion_tokens)).filter(AILog.store_id == store.id, AILog.created_at >= current_month).scalar() or 0
+                is_dwng = (store.monthly_token_limit and tokens_used >= store.monthly_token_limit)
+
+                ai_context = {
+                    "system_prompt": full_system_prompt,
+                    "history": context,
+                    "image_base64": image_base64,
+                    "store_id": getattr(store, "id", None),
+                    "is_downgraded": is_dwng
+                }
                 res = self.ai_service.generate_json_response(
-                    system_prompt=full_system_prompt, 
-                    user_message=text, 
-                    context=context,
-                    image_base64=image_base64
+                    message=text, 
+                    context=ai_context
                 )
                 
                 # Robust unpacker

@@ -1,6 +1,8 @@
 import logging
 from src.core.celery_app import celery
 from src.ai_engine.decision import DecisionEngine
+from src.ai_engine.service import AIRetryException
+from celery.exceptions import Retry
 
 logger = logging.getLogger(__name__)
 decision_engine = DecisionEngine()
@@ -81,9 +83,17 @@ def process_telegram_webhook(self, token: str, update: dict):
             from src.chat.service import send_telegram_msg
             send_telegram_msg(token, str(user_id), reply)
             _log_event("telegram", token, "Reply Generated")
+    except AIRetryException as e:
+        _log_event("telegram", token, "AIRetry", str(e))
+        raise self.retry(exc=e, countdown=getattr(e, 'retry_after', 10), max_retries=1)
     except Exception as e:
-        _log_event("telegram", token, "Error", str(e))
-        self.retry(exc=e, countdown=5)
+        if isinstance(e, Retry): raise
+        _log_event("telegram", token, "Fatal Error", str(e))
+        try:
+            from src.chat.service import send_telegram_msg
+            send_telegram_msg(token, str(user_id), "⚠️ النظام مشغول حالياً، يرجى المحاولة بعد لحظات | System is busy, please try again shortly")
+        except:
+            pass
     finally:
         print("TASK END")
 
@@ -124,9 +134,23 @@ def process_whatsapp_webhook(self, token: str, update: dict):
                 if not res.ok:
                     _log_event("whatsapp", token, "Send Error", res.text)
             _log_event("whatsapp", token, "Reply Generated")
+    except AIRetryException as e:
+        _log_event("whatsapp", token, "AIRetry", str(e))
+        raise self.retry(exc=e, countdown=getattr(e, 'retry_after', 10), max_retries=1)
     except Exception as e:
-        _log_event("whatsapp", token, "Error", str(e))
-        self.retry(exc=e, countdown=5)
+        if isinstance(e, Retry): raise
+        _log_event("whatsapp", token, "Fatal Error", str(e))
+        try:
+            phone_number_id = value.get("metadata", {}).get("phone_number_id") if 'value' in locals() else None
+            user_phone = msg.get("from") if 'msg' in locals() else None
+            if phone_number_id and user_phone:
+                import requests
+                url = f"https://graph.facebook.com/v17.0/{phone_number_id}/messages"
+                headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+                payload = {"messaging_product": "whatsapp", "to": user_phone, "type": "text", "text": {"body": "⚠️ النظام مشغول حالياً، يرجى المحاولة بعد لحظات | System is busy, please try again shortly"}}
+                requests.post(url, headers=headers, json=payload)
+        except:
+            pass
 
 @celery.task(name="process_instagram_task", bind=True, max_retries=3)
 def process_instagram_webhook(self, token: str, update: dict):
@@ -160,7 +184,20 @@ def process_instagram_webhook(self, token: str, update: dict):
             if not res.ok:
                 _log_event("instagram", token, "Send Error", res.text)
             _log_event("instagram", token, "Reply Generated")
+    except AIRetryException as e:
+        _log_event("instagram", token, "AIRetry", str(e))
+        raise self.retry(exc=e, countdown=getattr(e, 'retry_after', 10), max_retries=1)
     except Exception as e:
-        _log_event("instagram", token, "Error", str(e))
-        self.retry(exc=e, countdown=5)
+        if isinstance(e, Retry): raise
+        _log_event("instagram", token, "Fatal Error", str(e))
+        try:
+            sender_id = msg_ev.get("sender", {}).get("id") if 'msg_ev' in locals() else None
+            if sender_id:
+                import requests
+                url = "https://graph.facebook.com/v17.0/me/messages"
+                headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+                payload = {"recipient": {"id": sender_id}, "message": {"text": "⚠️ النظام مشغول حالياً، يرجى المحاولة بعد لحظات | System is busy, please try again shortly"}}
+                requests.post(url, headers=headers, json=payload)
+        except:
+            pass
 

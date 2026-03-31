@@ -122,7 +122,7 @@ class ChatProcessingService:
                         system_prompt=f"العميل أرسل عنوان التوصيل الخاص به: '{text}'. مهمتك: أجب بلطافة وأخبره أنه تم تثبيت الطلب بنجاح وأنه سيشحن في أقرب وقت. لا تطلب معلومات إضافية واختتم المحادثة.",
                         user_message=text,
                         context=context,
-                        image_base64=None
+                        
                     )
                     send_telegram_msg(token, user_id, confirm_prompt)
                 return
@@ -224,12 +224,8 @@ class ChatProcessingService:
             import time
             start_time = time.time()
             
-            reply = ai_engine.generate_response(
-                system_prompt=full_system_prompt, 
-                user_message=text, 
-                context=context,
-                image_base64=image_base64
-            )
+            reply = ai_engine.generate_response(message=text, context={'system_prompt': full_system_prompt, 'history': context,
+                'image_base64': image_base64, 'store_id': getattr(store, 'id', None), 'is_downgraded': False})
             
             processing_time_ms = int((time.time() - start_time) * 1000)
             
@@ -449,7 +445,7 @@ class ChatProcessingService:
 تصنيف العميل (إلزامي): أضف في نهاية رسالتك، وفي سطر مستقل تماماً، هذا الكود فقط لتقييم العميل واستخراج بياناته:
 {"lead_status":"interested"|"not_interested"|"needs_followup", "last_product":"المنتج هنا", "price_range":"السعر هنا", "intent":"نية العميل هنا"}
 """
-            reply = ai_engine.generate_response(system_prompt=full_system_prompt, user_message=text, context=context)
+            reply = ai_engine.generate_response(message=text, context={'system_prompt': full_system_prompt, 'history': context, 'store_id': getattr(store, 'id', None), 'is_downgraded': False})
             
             clean_reply = reply.strip()
             import json
@@ -641,7 +637,7 @@ class ChatProcessingService:
 تصنيف العميل (إلزامي): أضف في نهاية رسالتك، وفي سطر مستقل تماماً، هذا الكود فقط لتقييم العميل واستخراج بياناته:
 {"lead_status":"interested"|"not_interested"|"needs_followup", "last_product":"المنتج هنا", "price_range":"السعر هنا", "intent":"نية العميل هنا"}
 """
-            reply = ai_engine.generate_response(system_prompt=full_system_prompt, user_message=text, context=context)
+            reply = ai_engine.generate_response(message=text, context={'system_prompt': full_system_prompt, 'history': context, 'store_id': getattr(store, 'id', None), 'is_downgraded': False})
             
             clean_reply = reply.strip()
             clean_reply = reply.strip()

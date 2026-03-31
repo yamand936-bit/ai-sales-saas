@@ -131,36 +131,65 @@ window.sortChats = sortChats;
 window.openChat = openChat;
 
 
+function parseData(el) {
+    return {
+        storeId: el.dataset.storeId ? Number(el.dataset.storeId) : null,
+        userId: el.dataset.userId ? Number(el.dataset.userId) : null,
+        telegramId: el.dataset.telegramId,
+        name: el.dataset.name,
+        requiresHuman: el.dataset.human === "true",
+        tab: el.dataset.tab
+    };
+}
+
 // --- Event Listeners Mapping ---
 function handleAction(el, event) {
     const action = el.dataset.action;
+    
+    if (!action) {
+        console.warn("handleAction called on element with no data-action attribute", el);
+        return;
+    }
+
+    // Prevent double clicking temporarily
+    if (el.hasAttribute('disabled')) return;
+    el.setAttribute('disabled', 'true');
+    el.style.pointerEvents = 'none';
+    setTimeout(() => {
+        el.removeAttribute('disabled');
+        el.style.pointerEvents = 'auto';
+    }, 500);
+
+    const data = parseData(el);
 
     if (action === "openChat") {
         openChat(
-            el.dataset.storeId,
-            el.dataset.userId,
-            el.dataset.telegramId,
-            el.dataset.name,
-            el.dataset.human === "true"
+            data.storeId,
+            data.userId,
+            data.telegramId,
+            data.name,
+            data.requiresHuman
         );
     }
 
     if (action === "toggleAI") {
-        toggleSystemAI(el.dataset.storeId, event);
+        event.preventDefault();
+        toggleSystemAI(data.storeId, event);
     }
 
     if (action === "switchTab") {
-        switchTab(el.dataset.tab);
+        switchTab(data.tab);
     }
 }
 
 document.addEventListener("DOMContentLoaded", () => {
-    // Event delegation is safer for elements that might re-render, though querySelectorAll works for static.
     document.body.addEventListener("click", (e) => {
-        let el = e.target.closest("[data-action]");
-        if (el) handleAction(el, e);
+        const el = e.target.closest("[data-action]");
+        if (!el) return;
+        handleAction(el, e);
     });
 });
+
 
 function handleAction(el, event) {
     const action = el.dataset.action;

@@ -386,7 +386,8 @@ def auto_followup(store_id):
             context = [{"role": h.role, "content": h.content} for h in msgs[-5:]]
             sys_prompt = f"أنت مندوب مبيعات المتجر '{store.name}'. العميل تواصل معك مؤخراً وبدا مهتماً ثم توقف عن الرد. رسالتك السابقة له كانت: '{last_ai_msg.content if last_ai_msg else ''}'. \nالمطلوب: أرسل رسالة متابعة طبيعية، ودودة، وقصيرة جداً، تستند إلى آخر موضوع تحدثتم فيه بشكل ذكي. تجنب تكرار الكلام السابق، وتجنب الأسئلة النمطية العائمة مثل 'هل تحتاج مساعدة؟'. لا تستخدم أي مقدمات."
             
-            reply = ai_engine.generate_response(system_prompt=sys_prompt, user_message="[SYSTEM TRIGGER]: العميل غير نشط، يرجى إرسال رسالة متابعة ذكية.", context=context)
+            ai_ctx = {'system_prompt': sys_prompt, 'history': context, 'store_id': getattr(store, 'id', None), 'is_downgraded': False}
+            reply = ai_engine.generate_response(message="[SYSTEM TRIGGER]: العميل غير نشط، يرجى إرسال رسالة متابعة ذكية.", context=ai_ctx)
 
             # Task 5: Log follow_up_sent explicitly
             logger.info(f"PERFORMANCE: follow_up_sent for Conv {conv.id}")
