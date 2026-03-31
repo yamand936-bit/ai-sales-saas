@@ -261,7 +261,7 @@ class MerchantService:
     def get_conversations(store_id: int):
         db = SessionLocal()
         try:
-            return db.query(Conversation).join(User).filter(User.store_id == store_id).order_by(Conversation.updated_at.desc()).all()
+            return db.query(Conversation).join(User).filter(User.store_id == store_id).order_by(Conversation.created_at.desc()).all()
         finally:
             db.close()
 
