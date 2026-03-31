@@ -20,13 +20,11 @@ from sqlalchemy import func
 from werkzeug.security import generate_password_hash, check_password_hash
 from functools import wraps
 
-from src.core.database import engine, SessionLocal
-from src.core.models_aggregator import Base
+from src.core.database import engine, SessionLocal, Base
 from src.core.config import settings
 from src.api.middlewares import merchant_required, admin_required
 from src.admin.router import admin_bp
 
-from src.core.init_settings import init_settings
 
 from src.stores.models import Store
 from src.products.models import Product
@@ -47,7 +45,6 @@ logger.info("Initializing Database schema...")
 Base.metadata.create_all(bind=engine)
 
 app = Flask(__name__, template_folder='templates')
-init_settings()
 
 app.secret_key = os.getenv("FLASK_SECRET_KEY")
 if not app.secret_key:

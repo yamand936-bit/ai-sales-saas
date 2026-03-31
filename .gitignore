@@ -7,3 +7,6 @@ trace.*
 temp_*
 scripts/
 *.sqlite3
+
+.coverage
+htmlcov/
