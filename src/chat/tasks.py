@@ -40,9 +40,13 @@ def check_store_limits(platform: str, token: str):
             return False, "Store Subscription Expired"
 
         # 3. Quota Enforcement
-        current_month = datetime.utcnow().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-        tokens_used = db.query(func.sum(AILog.prompt_tokens + AILog.completion_tokens))\
-                        .filter(AILog.store_id == store.id, AILog.created_at >= current_month).scalar() or 0
+        from src.ai_engine.service import ai_engine
+        tokens_used = ai_engine.get_cached_monthly_tokens(store.id)
+        if tokens_used is None:
+            current_month = datetime.utcnow().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+            tokens_used = db.query(func.sum(AILog.prompt_tokens + AILog.completion_tokens))\
+                            .filter(AILog.store_id == store.id, AILog.created_at >= current_month).scalar() or 0
+            ai_engine.set_cached_monthly_tokens(store.id, tokens_used)
                         
         if store.monthly_token_limit and store.monthly_token_limit > 0:
             if tokens_used >= store.monthly_token_limit:

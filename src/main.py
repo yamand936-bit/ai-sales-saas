@@ -3,6 +3,19 @@ import logging
 import datetime
 import secrets
 
+import sentry_sdk
+from sentry_sdk.integrations.flask import FlaskIntegration
+from sentry_sdk.integrations.celery import CeleryIntegration
+
+sentry_dsn = os.getenv("SENTRY_DSN", "")
+if sentry_dsn:
+    sentry_sdk.init(
+        dsn=sentry_dsn,
+        integrations=[FlaskIntegration(), CeleryIntegration()],
+        traces_sample_rate=1.0,
+        profiles_sample_rate=1.0,
+    )
+
 from flask import Flask, jsonify, render_template, request, redirect, flash, session, url_for
 from sqlalchemy import func
 from werkzeug.security import generate_password_hash, check_password_hash

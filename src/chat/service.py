@@ -223,9 +223,9 @@ class ChatProcessingService:
 
             import time
             start_time = time.time()
-            
+            usage_info = {}
             reply = ai_engine.generate_response(message=text, context={'system_prompt': full_system_prompt, 'history': context,
-                'image_base64': image_base64, 'store_id': getattr(store, 'id', None), 'is_downgraded': False})
+                'image_base64': image_base64, 'store_id': getattr(store, 'id', None), 'is_downgraded': False}, out_usage=usage_info)
             
             processing_time_ms = int((time.time() - start_time) * 1000)
             
@@ -234,11 +234,12 @@ class ChatProcessingService:
                 ai_log = AILog(
                     store_id=store.id,
                     conversation_id=conversation.id,
-                    prompt_tokens=len(full_system_prompt) // 4 if full_system_prompt else 0,
-                    completion_tokens=len(reply) // 4 if reply else 0,
+                    prompt_tokens=usage_info.get('prompt_tokens') or (len(full_system_prompt) // 4 if full_system_prompt else 0),
+                    completion_tokens=usage_info.get('completion_tokens') or (len(reply) // 4 if reply else 0),
                     processing_time_ms=processing_time_ms
                 )
                 db.add(ai_log)
+                ai_engine.invalidate_monthly_tokens(store.id)
             except Exception as e:
                 logger.error(f"Failed to write AILog: {e}")
             

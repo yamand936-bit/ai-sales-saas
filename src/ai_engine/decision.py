@@ -136,7 +136,10 @@ class DecisionEngine:
                 from sqlalchemy import func
                 from datetime import datetime
                 current_month = datetime.utcnow().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-                tokens_used = db.query(func.sum(AILog.prompt_tokens + AILog.completion_tokens)).filter(AILog.store_id == store.id, AILog.created_at >= current_month).scalar() or 0
+                tokens_used = self.ai_service.get_cached_monthly_tokens(store.id)
+                if tokens_used is None:
+                    tokens_used = db.query(func.sum(AILog.prompt_tokens + AILog.completion_tokens)).filter(AILog.store_id == store.id, AILog.created_at >= current_month).scalar() or 0
+                    self.ai_service.set_cached_monthly_tokens(store.id, tokens_used)
                 is_dwng = (store.monthly_token_limit and tokens_used >= store.monthly_token_limit)
 
                 ai_context = {
@@ -146,18 +149,15 @@ class DecisionEngine:
                     "store_id": getattr(store, "id", None),
                     "is_downgraded": is_dwng
                 }
-                res = self.ai_service.generate_json_response(
+                usage_info = {}
+                raw_reply = self.ai_service.generate_json_response(
                     message=text, 
-                    context=ai_context
+                    context=ai_context,
+                    out_usage=usage_info
                 )
                 
-                # Robust unpacker
-                if isinstance(res, tuple):
-                    raw_reply, prompt_tokens, completion_tokens = res
-                else:
-                    raw_reply = res
-                    prompt_tokens, completion_tokens = 0, 0
-                    
+                prompt_tokens = usage_info.get("prompt_tokens", 0)
+                completion_tokens = usage_info.get("completion_tokens", 0)
                 processing_time_ms = int((time.time() - start_time) * 1000)
             
             try:
@@ -177,6 +177,7 @@ class DecisionEngine:
                     processing_time_ms=processing_time_ms
                 )
                 db.add(ai_log)
+                self.ai_service.invalidate_monthly_tokens(store.id)
             except Exception as e:
                 logger.error(f"AILog error: {e}")
 

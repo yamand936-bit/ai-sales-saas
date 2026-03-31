@@ -38,7 +38,7 @@ class OpenAIProvider(BaseProvider):
     def is_configured(self) -> bool:
         return self.client is not None
 
-    def generate(self, model: str, messages: list, is_json: bool, **kwargs) -> str:
+    def generate(self, model: str, messages: list, is_json: bool, **kwargs) -> tuple:
         payload = {
             "model": model,
             "messages": messages,
@@ -50,7 +50,11 @@ class OpenAIProvider(BaseProvider):
             payload["response_format"] = {"type": "json_object"}
             
         res = self.client.chat.completions.create(**payload)
-        return res.choices[0].message.content
+        usage_dict = {
+            "prompt_tokens": res.usage.prompt_tokens if res.usage else 0,
+            "completion_tokens": res.usage.completion_tokens if res.usage else 0
+        }
+        return res.choices[0].message.content, usage_dict
 
 class GeminiProvider(BaseProvider):
     def __init__(self):
@@ -88,7 +92,7 @@ class GeminiProvider(BaseProvider):
             
         return system_text.strip(), contents
 
-    def generate(self, model: str, messages: list, is_json: bool, **kwargs) -> str:
+    def generate(self, model: str, messages: list, is_json: bool, **kwargs) -> tuple:
         system_instructions, contents = self._convert_messages(messages)
         
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={self.api_key}"
@@ -111,9 +115,14 @@ class GeminiProvider(BaseProvider):
             
         data = res.json()
         try:
-            return data["candidates"][0]["content"]["parts"][0]["text"]
-        except:
-            raise Exception(f"Gemini malformed response: {data}")
+            text = data["candidates"][0]["content"]["parts"][0]["text"]
+            usage_meta = data.get("usageMetadata", {})
+            return text, {
+                "prompt_tokens": usage_meta.get("promptTokenCount", 0),
+                "completion_tokens": usage_meta.get("candidatesTokenCount", 0)
+            }
+        except Exception as e:
+            raise Exception(f"Gemini malformed response: {data} - Exception: {e}")
 
 # ==========================================
 # INTELLIGENT ROUTER LAYER
@@ -128,7 +137,8 @@ class AIRouter:
         try:
             self.redis_client = redis.from_url(settings.REDIS_URL, decode_responses=True)
             self.redis_client.ping()
-        except:
+        except Exception as e:
+            logger.warning(f"AIRouter redis init failed: {e}")
             self.redis_client = None
 
     def _get_cache(self, messages: list):
@@ -153,7 +163,8 @@ class AIRouter:
         try:
             self.redis_client.incr(f"ai:{metric}")
             self.redis_client.incr(f"ai:{provider}:{metric}")
-        except: pass
+        except Exception as e:
+            logger.debug(f"Metric recording failed: {e}")
 
     def _record_failure(self, provider: str):
         if not self.redis_client: return
@@ -162,7 +173,8 @@ class AIRouter:
             self.redis_client.rpush(key, str(time.time()))
             self.redis_client.expire(key, 60)
             self._record_metric(provider, "failure")
-        except: pass
+        except Exception as e:
+            logger.debug(f"Failure streak recording failed: {e}")
 
     def _record_store_metrics(self, store_id: int, provider: str, model: str, tokens: int, cost: float, latency: int):
         if not self.redis_client: return
@@ -188,14 +200,15 @@ class AIRouter:
             pipe.ltrim(f"ai:metrics:latency:store:{store_id}", 0, 99)
             
             pipe.execute()
-        except: pass
+        except Exception as e:
+            logger.debug(f"Store metrics recording failed: {e}")
 
     def _is_degraded(self, provider: str) -> bool:
         if not self.redis_client: return False
         try:
             count = self.redis_client.llen(f"failure_streak:{provider}")
             return count >= 3
-        except: return False
+        except Exception: return False
 
     def select_best_provider(self, is_complex: bool, is_downgraded: bool) -> tuple:
         active = [p for p in self.providers.values() if p.is_configured() and not self._is_degraded(p.name)]
@@ -221,7 +234,15 @@ class AIRouter:
             
         return best, model_name
 
-    def route_request(self, store_id: int, messages: list, is_json: bool, is_complex: bool, is_downgraded: bool, **kwargs) -> str:
+    def invalidate_monthly_tokens(self, store_id: int):
+        if not self.redis_client: return
+        try:
+            current_month = time.strftime("%Y-%m")
+            self.redis_client.delete(f"tokens:monthly:{store_id}:{current_month}")
+        except Exception as e:
+            logger.debug(f"Failed to invalidate monthly tokens: {e}")
+
+    def route_request(self, store_id: int, messages: list, is_json: bool, is_complex: bool, is_downgraded: bool, **kwargs) -> tuple:
         # Rate Limiting
         if store_id and self.redis_client:
             try:
@@ -231,21 +252,21 @@ class AIRouter:
                     self.redis_client.expire(rpm_key, 60)
                 if current_rpm > 100:
                     logger.warning(f"[RATE LIMIT] Store {store_id} exceeded 100 requests per minute.")
-                    raise AIRetryException("Rate limit exceeded. Please slow down.", retry_after=60)
+                    raise AIRetryException("⚠️ Too many requests, please wait a moment", retry_after=60)
                 
                 # Check daily token limits broadly (assumed 500k global fallback check if DB lags)
                 today = time.strftime("%Y-%m-%d")
                 daily_tokens = self.redis_client.get(f"ai:metrics:tokens:day:{today}:{store_id}")
                 if daily_tokens and int(daily_tokens) > 500000:
                     logger.warning(f"[RATE LIMIT] Store {store_id} exceeded daily token envelope.")
-                    raise AIRetryException("Daily token limit reached.")
+                    raise AIRetryException("⚠️ Daily token limit reached. Please upgrade your plan.")
             except redis.exceptions.RedisError: pass
 
         # Caching Layer Check
         cached = self._get_cache(messages)
         if cached:
             self._record_metric("cache", "hit")
-            return cached
+            return cached, {"prompt_tokens": 0, "completion_tokens": 0}
 
         best_provider, target_model = self.select_best_provider(is_complex, is_downgraded)
         
@@ -257,14 +278,13 @@ class AIRouter:
         
         for attempt in range(max_retries):
             try:
-                res = current_provider.generate(target_model, messages, is_json, **kwargs)
+                res, usage = current_provider.generate(target_model, messages, is_json, **kwargs)
                 
                 latency = int((time.time() - start_time) * 1000)
                 if latency > 3000:
                     logger.warning(f"[AI SLOW] Provider {current_provider.name} | Model {target_model} | Latency {latency}ms")
                     
-                # Rough offline token estimation (real APIs stream usage dicts)
-                tokens_used = len(str(messages)) // 4 + len(res) // 4
+                tokens_used = usage.get("prompt_tokens", 0) + usage.get("completion_tokens", 0)
                 cost = (tokens_used / 1000) * 0.015 # Blended avg cost
                 
                 if store_id:
@@ -273,7 +293,7 @@ class AIRouter:
                 logger.info(f"[AI SUCCESS] Provider {current_provider.name} | Model {target_model}")
                 self._record_metric(current_provider.name, "success")
                 self._set_cache(messages, res)
-                return res
+                return res, usage
             except Exception as e:
                 err_str = str(e).lower()
                 is_fatal = "invalid_api_key" in err_str or "401" in err_str or "unauthorized" in err_str
@@ -300,13 +320,13 @@ class AIRouter:
             self._record_metric(current_provider.name, "fallback") # Recorded as a fallback event initiated from original
             
             try:
-                res = fallback.generate(fb_model, messages, is_json, **kwargs)
+                res, usage = fallback.generate(fb_model, messages, is_json, **kwargs)
                 
                 latency = int((time.time() - start_time) * 1000)
                 if latency > 3000:
                     logger.warning(f"[AI SLOW] Fallback {fallback.name} | Model {fb_model} | Latency {latency}ms")
                     
-                tokens_used = len(str(messages)) // 4 + len(res) // 4
+                tokens_used = usage.get("prompt_tokens", 0) + usage.get("completion_tokens", 0)
                 cost = (tokens_used / 1000) * 0.015
                 
                 if store_id:
@@ -315,7 +335,7 @@ class AIRouter:
                 logger.info(f"[AI SUCCESS] Fallback Provider {fallback.name} succeeded")
                 self._record_metric(fallback.name, "success")
                 self._set_cache(messages, res)
-                return res
+                return res, usage
             except Exception as e:
                 self._record_failure(fallback.name)
                 logger.error(f"[AI FAILURE] Fallback Provider {fallback.name} also exhausted.")
@@ -340,8 +360,10 @@ class AIEngineService:
             return True
         return False
 
-    def generate_response(self, message: str, context: dict) -> str:
+    def generate_response(self, message: str, context: dict, out_usage: dict = None) -> str:
         if not self.is_configured():
+            if out_usage is not None:
+                out_usage.update({"prompt_tokens": 0, "completion_tokens": 0})
             return "عذراً، نظام الذكاء الاصطناعي قيد الصيانة."
             
         messages = [{"role": "system", "content": context.get("system_prompt", "")}]
@@ -358,7 +380,7 @@ class AIEngineService:
         is_complex = self._determine_complexity(message, context)
         is_downgraded = context.get("is_downgraded", False)
 
-        return self.router.route_request(
+        res, usage = self.router.route_request(
             store_id=store_id,
             messages=messages, 
             is_json=False, 
@@ -367,9 +389,14 @@ class AIEngineService:
             temperature=0.7, 
             max_tokens=600
         )
+        if out_usage is not None:
+            out_usage.update(usage)
+        return res
 
-    def generate_json_response(self, message: str, context: dict) -> str:
+    def generate_json_response(self, message: str, context: dict, out_usage: dict = None) -> str:
         if not self.is_configured():
+            if out_usage is not None:
+                out_usage.update({"prompt_tokens": 0, "completion_tokens": 0})
             return '{"reply": "عذراً، نظام الذكاء الاصطناعي قيد الصيانة.", "intent": "none", "entities": {}}'
 
         messages = [{"role": "system", "content": context.get("system_prompt", "")}]
@@ -386,7 +413,7 @@ class AIEngineService:
         is_complex = self._determine_complexity(message, context)
         is_downgraded = context.get("is_downgraded", False)
 
-        return self.router.route_request(
+        res, usage = self.router.route_request(
             store_id=store_id,
             messages=messages, 
             is_json=True, 
@@ -395,6 +422,29 @@ class AIEngineService:
             temperature=0.3, 
             max_tokens=600
         )
+        if out_usage is not None:
+            out_usage.update(usage)
+        return res
+
+    def invalidate_monthly_tokens(self, store_id: int):
+        self.router.invalidate_monthly_tokens(store_id)
+
+    def get_cached_monthly_tokens(self, store_id: int) -> int:
+        if not self.router.redis_client: return None
+        try:
+            import time
+            current_month = time.strftime("%Y-%m")
+            val = self.router.redis_client.get(f"tokens:monthly:{store_id}:{current_month}")
+            return int(val) if val else None
+        except Exception: return None
+
+    def set_cached_monthly_tokens(self, store_id: int, tokens: int):
+        if not self.router.redis_client: return
+        try:
+            import time
+            current_month = time.strftime("%Y-%m")
+            self.router.redis_client.setex(f"tokens:monthly:{store_id}:{current_month}", 60, tokens)
+        except Exception: pass
 
     def transcribe_audio(self, audio_bytes: bytes, filename: str = "voice.ogg") -> str:
         # Fallback simplistic passthrough for OpenAI specific endpoint
