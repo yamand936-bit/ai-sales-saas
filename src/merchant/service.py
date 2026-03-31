@@ -308,3 +308,30 @@ class MerchantService:
             return db.query(Store).filter_by(owner_email=email).first()
         finally:
             db.close()
+
+    @staticmethod
+    def get_users(store_id: int):
+        db = SessionLocal()
+        try:
+            return db.query(User).filter_by(store_id=store_id).all()
+        finally:
+            db.close()
+
+    @staticmethod
+    def get_user(user_id: int, store_id: int):
+        db = SessionLocal()
+        try:
+            return db.query(User).filter_by(id=user_id, store_id=store_id).first()
+        finally:
+            db.close()
+
+    @staticmethod
+    def get_user_by_telegram(telegram_id: str, store_id: int):
+        db = SessionLocal()
+        try:
+            return db.query(User).filter_by(
+                telegram_id=telegram_id,
+                store_id=store_id
+            ).first()
+        finally:
+            db.close()

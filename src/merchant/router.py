@@ -8,7 +8,6 @@ import datetime
 from src.core.database import SessionLocal
 from src.products.models import Product
 from src.chat.models import AILog
-from src.users.models import User
 from src.utils.i18n import get_t
 from src.core.config import settings
 from src.merchant.service import MerchantService
@@ -94,7 +93,7 @@ def send_broadcast(store_id):
     try:
         store = MerchantService.get_store(store_id)
         if store and store.telegram_token and msg:
-            users = db.query(User).filter_by(store_id=store_id).all()
+            users = MerchantService.get_users(store_id)
             for u in users:
                 if u.telegram_id:
                     send_telegram_message.delay(store.telegram_token, u.telegram_id, msg)
@@ -119,7 +118,7 @@ def get_messages(store_id, user_id):
     if store_id != session.get("store_id"): return "Forbidden", 403
     db = SessionLocal()
     try:
-        user = db.query(User).filter_by(id=user_id, store_id=store_id).first()
+        user = MerchantService.get_user(user_id, store_id)
         if not user: return jsonify({"messages": []})
         all_c = MerchantService.get_conversations(getattr(store, 'id', session.get('store_id')))
         conv = next((c for c in all_c if c.user_id == user_id), None)
@@ -138,7 +137,7 @@ def merchant_conversations_endpoint():
     if not store_id: return jsonify({"status": "error", "message": "unauthorized"}), 403
     db = SessionLocal()
     try:
-        users = db.query(User).filter_by(store_id=store_id).all()
+        users = MerchantService.get_users(store_id)
         user_ids = [u.id for u in users]
         convs = MerchantService.get_conversations(store_id)
         
@@ -167,7 +166,7 @@ def merchant_users_endpoint():
     if not store_id: return jsonify({"status": "error", "message": "unauthorized"}), 403
     db = SessionLocal()
     try:
-        users = db.query(User).filter_by(store_id=store_id).all()
+        users = MerchantService.get_users(store_id)
         data = [{"id": u.id, "name": u.first_name, "telegram_id": u.telegram_id} for u in users]
         result = {"status": "success", "data": data}
         print("DB RESULT:", result)
@@ -181,7 +180,7 @@ def toggle_ai(store_id, user_id):
     if store_id != session.get("store_id"): return "Forbidden", 403
     db = SessionLocal()
     try:
-        user = db.query(User).filter_by(id=user_id, store_id=store_id).first()
+        user = MerchantService.get_user(user_id, store_id)
         if not user: return redirect("/dashboard")
         all_c = MerchantService.get_conversations(getattr(store, 'id', session.get('store_id')))
         conv = next((c for c in all_c if c.user_id == user_id), None)
@@ -215,7 +214,7 @@ def merchant_reply(store_id, telegram_id):
     from src.chat.service import send_telegram_msg
     try:
         store = MerchantService.get_store(store_id)
-        user = db.query(User).filter_by(telegram_id=telegram_id, store_id=store_id).first()
+        user = MerchantService.get_user_by_telegram(telegram_id, store_id)
         if not store or not user:
             return jsonify({"error": "Not found"}), 404
             
