@@ -226,3 +226,23 @@ class MerchantService:
             return True
         finally:
             db.close()
+
+    @staticmethod
+    def get_orders(store_id: int):
+        db = SessionLocal()
+        try:
+            return db.query(Order).filter(Order.store_id == store_id).all()
+        finally:
+            db.close()
+
+    @staticmethod
+    def update_order_status(order_id: int, status: str):
+        db = SessionLocal()
+        try:
+            order = db.query(Order).get(order_id)
+            order.status = status
+            db.commit()
+            db.refresh(order)
+            return order
+        finally:
+            db.close()

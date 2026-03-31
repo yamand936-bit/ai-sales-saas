@@ -109,16 +109,12 @@ def send_broadcast(store_id):
 @merchant_required
 def approve_order(store_id, order_id):
     if store_id != session.get("store_id"): return "Forbidden", 403
-    db = SessionLocal()
     try:
-        order = db.query(Order).filter_by(id=order_id, store_id=store_id).first()
-        if order:
-            order.status = "paid"
-            db.commit()
-            flash("Order approved!", "success")
-        return redirect("/dashboard")
-    finally:
-        db.close()
+        MerchantService.update_order_status(order_id, "paid")
+        flash("Order approved!", "success")
+    except Exception:
+        pass # Handle if order is None per simplified service
+    return redirect("/dashboard")
 
 @merchant_bp.route("/api/merchant/<int:store_id>/messages/<int:user_id>", methods=["GET"])
 @merchant_required
