@@ -28,7 +28,9 @@ def check_store_limits(platform: str, token: str):
         elif platform == "instagram":
             store = db.query(Store).filter(Store.status == 'active', Store.instagram_token == token).first()
 
-        if not store: return False, "Store Not Found"
+        if not store:
+            logger.warning(f"Store not found for token {token}")
+            return False, "Store Not Found"
 
         # 1. Status Check
         if store.status != 'active':
@@ -77,6 +79,8 @@ def process_telegram_webhook(self, token: str, update: dict):
             text = "[VOICE NOTE RECEIVED]"
 
         user_id = message.get("from", {}).get("id")
+        if not user_id:
+            return
         first_name = message.get("from", {}).get("first_name", "User")
         
         from src.core.limiter import check_rate_limit
@@ -359,7 +363,8 @@ def process_single_followup(conv_id: int, store_id: int, cutoff_iso: str):
     MerchantService.update_conversation_context(conv.id, json.dumps(ctx))
     
     if conv.channel == "telegram" and getattr(store, "telegram_token", None) and getattr(conv.user, "telegram_id", None):
-        send_telegram_msg(store.telegram_token, conv.user.telegram_id, reply)
+        if getattr(store, "telegram_token", None) and getattr(conv.user, "telegram_id", None):
+            send_telegram_msg(store.telegram_token, conv.user.telegram_id, reply)
     
     follow_ups_sent += 1
     

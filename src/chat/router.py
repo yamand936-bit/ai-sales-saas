@@ -1,3 +1,4 @@
+from src.core.limiter import limiter
 from flask import Blueprint, request, jsonify
 from src.core.database import SessionLocal
 import logging
@@ -22,6 +23,7 @@ def verify_meta_signature(req):
     return hmac.compare_digest(expected_sig, signature)
 
 @chat_bp.route('/telegram/<token>', methods=['POST'])
+@limiter.limit("30 per minute")
 def telegram_webhook(token):
     # Process asynchronously via Celery to ensure Telegram gets immediate 200 OK
     update = request.get_json()

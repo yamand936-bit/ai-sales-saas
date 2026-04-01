@@ -22,7 +22,8 @@ admin_bp = Blueprint('admin', __name__)
 def admin_login():
     if request.method == "POST":
         password = request.form.get("password")
-        if password == os.getenv("SUPERADMIN_PASSWORD"):
+        import hmac
+        if hmac.compare_digest(password or "", os.getenv("SUPERADMIN_PASSWORD") or ""):
             session.permanent = True
             session["role"] = "admin"
             session["is_admin"] = True
