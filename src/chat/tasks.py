@@ -226,3 +226,104 @@ def process_instagram_webhook(self, token: str, update: dict):
             except Exception:
                 pass
 
+
+@celery.task(name="process_auto_followup")
+def process_auto_followup(store_id: int):
+    try:
+        from src.chat.service import send_telegram_msg
+        from src.ai_engine.service import ai_engine
+        from src.merchant.service import MerchantService
+        import json
+        import datetime
+        import logging
+
+        logger = logging.getLogger(__name__)
+
+        store = MerchantService.get_store(store_id)
+        if not store or not store.ai_enabled:
+            return {"status": "error", "message": "Store AI inactive"}
+
+        conversations = MerchantService.get_conversations(store.id)
+        follow_ups_sent = 0
+
+        try:
+            feats = json.loads(store.features) if getattr(store, "features", None) else {}
+            delay_mins = int(feats.get("followup_delay", 60))
+        except Exception:
+            delay_mins = 60
+
+        delay_mins = max(30, delay_mins)
+        cutoff_time = datetime.datetime.utcnow() - datetime.timedelta(minutes=delay_mins)
+
+        for conv in conversations:
+            ctx = {}
+            if conv.context:
+                try:
+                    ctx = json.loads(conv.context)
+                except Exception: pass
+
+            if ctx.get("auto_followed_up_at"):
+                logger.info(f"AFU Skip Conv {conv.id}: Already followed up.")
+                continue
+
+            msgs = MerchantService.get_messages(conv.id)
+            if len(msgs) < 2:
+                logger.info(f"AFU Skip Conv {conv.id}: Less than 2 messages.")
+                continue
+
+            last_msg = msgs[-1]
+            last_ai_msg = next((m for m in reversed(msgs) if m.role == 'assistant'), None)
+
+            if last_msg.role != 'user':
+                logger.info(f"AFU Skip Conv {conv.id}: Last message not from user.")
+                continue
+
+            if last_msg.timestamp >= cutoff_time:
+                continue
+
+            if last_ai_msg:
+                ai_text = last_ai_msg.content.strip()
+                if ai_text.endswith("?") or ai_text.endswith("?") or "?? ????? ??????" in ai_text or "Can I help" in ai_text:
+                    logger.info(f"AFU Skip Conv {conv.id}: Last AI message was already a question.")
+                    continue
+
+            user_text_lower = last_msg.content.strip().lower()
+            short_dismissals = ["ok", "thanks", "????", "????", "????? ???????", "???", "????", "?? ????", "no thanks"]
+            if len(user_text_lower) < 3 or any(user_text_lower == word for word in short_dismissals):
+                logger.info(f"AFU Skip Conv {conv.id}: Last message was short/dismissal")
+                continue
+
+            if last_ai_msg and getattr(conv, 'category', '') == 'checkout':
+                logger.info(f"AFU Skip Conv {conv.id}: Conversation is in checkout/completed state.")
+                continue
+            if any(ind in h.content for h in msgs[-5:] for ind in ["[CHECKOUT:", "?? ????? ????? ?????"]):
+                logger.info(f"AFU Skip Conv {conv.id}: Conversation indicates order completion/checkout recently.")
+                continue
+
+            context = [{"role": h.role, "content": h.content} for h in msgs[-5:]]
+            sys_prompt = f"??? ????? ?????? ?????? '{store.name}'. ?????? ????? ??? ?????? ???? ?????? ?? ???? ?? ????. ?????? ??????? ?? ????: '{last_ai_msg.content if last_ai_msg else ''}'. \n???????: ???? ????? ?????? ??????? ?????? ?????? ????? ????? ??? ??? ????? ?????? ??? ???? ???. ???? ????? ?????? ??????? ????? ??????? ??????? ??????? ??? '?? ????? ???????'. ?? ?????? ?? ??????."
+
+            ai_ctx = {'system_prompt': sys_prompt, 'history': context, 'store_id': getattr(store, 'id', None), 'is_downgraded': False}
+            reply = ai_engine.generate_response(message="[SYSTEM TRIGGER]: ?????? ??? ???? ???? ????? ????? ?????? ????.", context=ai_ctx)
+
+            logger.info(f"PERFORMANCE: follow_up_sent for Conv {conv.id}")
+            logger.info(f"AFU Triggered Conv {conv.id}: Sent follow-up -> {reply}")
+
+            msg_ai = MerchantService.add_message(conversation_id=conv.id, role="assistant", content=reply)
+
+            ctx["auto_followed_up_at"] = datetime.datetime.utcnow().isoformat()
+            ctx["follow_up_sent"] = True
+            MerchantService.update_conversation_context(conv.id, json.dumps(ctx))
+
+            if conv.channel == "telegram" and getattr(store, "telegram_token", None) and getattr(conv.user, "telegram_id", None):
+                send_telegram_msg(store.telegram_token, conv.user.telegram_id, reply)
+
+            follow_ups_sent += 1
+
+        return {"status": "success", "follow_ups_sent": follow_ups_sent}
+
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).error(f"Auto-followup error: {e}", exc_info=True)
+        return {"status": "error", "message": str(e)}
+

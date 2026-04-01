@@ -191,32 +191,3 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 
 
-function handleAction(el, event) {
-    const action = el.dataset.action;
-
-    if (action === 'openChat') {
-        openChat(
-            el.dataset.storeId,
-            el.dataset.userId,
-            el.dataset.telegramId,
-            el.dataset.name,
-            el.dataset.human === 'true'
-        );
-    }
-
-    if (action === 'toggleAI') {
-        event.preventDefault();
-        toggleSystemAI(el.dataset.storeId, event);
-    }
-
-    if (action === 'switchTab') {
-        switchTab(el.dataset.tab);
-    }
-}
-
-document.addEventListener('DOMContentLoaded', () => {
-    document.body.addEventListener('click', (e) => {
-        let el = e.target.closest('[data-action]');
-        if (el) handleAction(el, e);
-    });
-});

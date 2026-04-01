@@ -201,14 +201,14 @@ def admin_store_detail(store_id):
 @admin_bp.route("/admin/messages-order", methods=["GET"])
 @admin_required
 def admin_messages_order():
-    print("API HIT: /admin/messages-order")
+    logger.info("API HIT: /admin/messages-order")
     data = AdminService.get_latest_messages()
     return jsonify({"status": "success", "data": data})
 
 @admin_bp.route("/admin/global-token", methods=["GET"])
 @admin_required
 def admin_global_token():
-    print("API HIT: /admin/global-token")
+    logger.info("API HIT: /admin/global-token")
     stores = AdminService.get_all_stores()
     data = [{"store_id": s.id, "telegram_token": s.telegram_token} for s in stores]
     return jsonify({"status": "success", "data": data})
@@ -216,27 +216,27 @@ def admin_global_token():
 @admin_bp.route("/admin/global-live-feed", methods=["GET"])
 @admin_required
 def admin_global_live_feed():
-    print("API HIT: /admin/global-live-feed")
+    logger.info("API HIT: /admin/global-live-feed")
     data = AdminService.get_latest_conversations()
     return jsonify({"status": "success", "data": data})
 
 @admin_bp.route("/admin/global-ai-usage", methods=["GET"])
 @admin_required
 def admin_global_ai_usage():
-    print("API HIT: /admin/global-ai-usage")
+    logger.info("API HIT: /admin/global-ai-usage")
     data = AdminService.get_ai_usage()
     return jsonify({"status": "success", "data": data})
 
 @admin_bp.route("/admin/audit-logs-header", methods=["GET"])
 @admin_required
 def admin_audit_logs_header():
-    print("API HIT: /admin/audit-logs-header")
+    logger.info("API HIT: /admin/audit-logs-header")
     return jsonify({"status": "success", "data": [{"log": "Active"}]})
 
 @admin_bp.route("/admin/subscription-days/<int:store_id>", methods=["GET"])
 @admin_required
 def admin_subscription_days(store_id):
-    print(f"API HIT: /admin/subscription-days/{store_id}")
+    logger.info(f"API HIT: /admin/subscription-days/{store_id}")
     days_left = AdminService.get_subscription_days(store_id)
     return jsonify({"days_left": days_left})
 

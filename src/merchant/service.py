@@ -32,8 +32,9 @@ class MerchantService:
             from sqlalchemy.exc import SQLAlchemyError
             
             try:
-                total_tokens = db.query(func.sum(AILog.prompt_tokens + AILog.completion_tokens)).filter(AILog.store_id == store.id).scalar() or 0
-                ai_interactions = db.query(AILog).filter_by(store_id=store.id).count()
+                thirty_days_ago = datetime.datetime.utcnow() - datetime.timedelta(days=30)
+                total_tokens = db.query(func.sum(AILog.prompt_tokens + AILog.completion_tokens)).filter(AILog.store_id == store.id, AILog.created_at >= thirty_days_ago).scalar() or 0
+                ai_interactions = db.query(AILog).filter(AILog.store_id == store.id, AILog.created_at >= thirty_days_ago).count()
             except SQLAlchemyError:
                 db.rollback()
                 total_tokens = 0
@@ -82,7 +83,7 @@ class MerchantService:
                 logging.getLogger(__name__).warning("Redis metrics unavailable: " + str(e))
             # Lists for CRM / Inventory / Orders
             try:
-                conversations = db.query(Conversation).join(User).filter(User.store_id == store.id).order_by(Conversation.created_at.desc()).all()
+                conversations = db.query(Conversation).join(User).filter(User.store_id == store.id).order_by(Conversation.created_at.desc()).limit(50).all()
                 import json
                 for c in conversations:
                     c.lead_status = "unknown"
@@ -102,14 +103,14 @@ class MerchantService:
                             
                 human_requests = [c for c in conversations if c.requires_human]
                 products = db.query(Product).filter(Product.store_id == store.id).all()
-                orders = db.query(Order).filter(Order.store_id == store.id).order_by(Order.created_at.desc()).all()
+                orders = db.query(Order).filter(Order.store_id == store.id).order_by(Order.created_at.desc()).limit(50).all()
             except SQLAlchemyError:
                 db.rollback()
                 conversations = []
                 human_requests = []
                 products = []
                 orders = []
-            users = db.query(User).filter_by(store_id=store.id).all()
+            users = db.query(User).filter_by(store_id=store.id).limit(50).all()
     
             is_expired = False
             if store.expires_at and store.expires_at < datetime.datetime.utcnow():
@@ -128,8 +129,8 @@ class MerchantService:
                 chart_dates = []
                 chart_tokens = []
     
-            print("API HIT: /merchant/dashboard-data")
-            print("TOGGLE AI:", store.ai_enabled)
+            logger.info("API HIT: /merchant/dashboard-data")
+            logger.info(f"TOGGLE AI: {store.ai_enabled}")
     
             # AI Smart Insights Logic
             ai_insights = []

@@ -28,7 +28,8 @@ class AdminService:
                 
             conv_count = db.query(Conversation).join(User).filter(User.store_id == store_id).count()
             order_count = db.query(Order).filter_by(store_id=store_id, status='paid').count()
-            tokens_used = db.query(func.sum(AILog.prompt_tokens + AILog.completion_tokens)).filter(AILog.store_id == store_id).scalar() or 0
+            thirty_days_ago = datetime.datetime.utcnow() - datetime.timedelta(days=30)
+            tokens_used = db.query(func.sum(AILog.prompt_tokens + AILog.completion_tokens)).filter(AILog.store_id == store_id, AILog.created_at >= thirty_days_ago).scalar() or 0
             
             return {
                 "store": store,
@@ -117,7 +118,8 @@ class AdminService:
             total_stores = db.query(func.count(Store.id)).scalar() or 0
             overdue_stores = db.query(Store).filter_by(payment_status='overdue').count()
             total_orders = db.query(func.count(Order.id)).scalar() or 0
-            global_tokens = db.query(func.sum(AILog.prompt_tokens + AILog.completion_tokens)).scalar() or 0
+            thirty_days_ago = datetime.datetime.utcnow() - datetime.timedelta(days=30)
+            global_tokens = db.query(func.sum(AILog.prompt_tokens + AILog.completion_tokens)).filter(AILog.created_at >= thirty_days_ago).scalar() or 0
             
             return {
                 "active_stores": active_stores,

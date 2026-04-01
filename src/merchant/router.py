@@ -4,6 +4,10 @@ from pydantic import ValidationError
 from src.products.schemas import ProductCreate
 from src.merchant.schemas import AIConfigUpdate
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 from flask import Blueprint, request, jsonify, render_template, redirect, session, flash, current_app, Response
 from sqlalchemy import func
 import json
@@ -129,7 +133,7 @@ def get_messages(store_id, user_id):
 @merchant_bp.route("/merchant/conversations", methods=["GET"])
 @merchant_required
 def merchant_conversations_endpoint():
-    print("API HIT: /merchant/conversations")
+    logger.info("API HIT: /merchant/conversations")
     store_id = session.get("store_id")
     if not store_id: return jsonify({"status": "error", "message": "unauthorized"}), 403
     
@@ -153,7 +157,7 @@ def merchant_conversations_endpoint():
 @merchant_bp.route("/merchant/users", methods=["GET"])
 @merchant_required
 def merchant_users_endpoint():
-    print("API HIT: /merchant/users")
+    logger.info("API HIT: /merchant/users")
     store_id = session.get("store_id")
     if not store_id: return jsonify({"status": "error", "message": "unauthorized"}), 403
     
@@ -252,109 +256,9 @@ def preview_ai():
 @merchant_required
 def auto_followup(store_id):
     if store_id != session.get("store_id"): return "Forbidden", 403
-    try:
-        from src.chat.service import send_telegram_msg
-        from src.ai_engine.service import ai_engine
-        import json
-        
-        store = MerchantService.get_store(store_id)
-        if not store or not store.ai_enabled:
-            return jsonify({"status": "error", "message": "Store AI inactive"}), 400
-            
-        conversations = MerchantService.get_conversations(store.id)
-        follow_ups_sent = 0
-        
-        try:
-            feats = json.loads(store.features) if store.features else {}
-            delay_mins = int(feats.get("followup_delay", 60))
-        except Exception:
-            delay_mins = 60
-            
-        delay_mins = max(30, delay_mins) # Task 2: minimum 30 minutes cooldown
-        cutoff_time = datetime.datetime.utcnow() - datetime.timedelta(minutes=delay_mins)
-
-        import logging
-        logger = logging.getLogger(__name__)
-
-        for conv in conversations:
-            ctx = {}
-            if conv.context:
-                try:
-                    ctx = json.loads(conv.context)
-                except Exception: pass
-            
-            if ctx.get("auto_followed_up_at"):
-                logger.info(f"AFU Skip Conv {conv.id}: Already followed up.")
-                continue
-                
-            msgs = MerchantService.get_messages(conv.id)
-            
-            # Task 2: conversation has at least 2 messages
-            if len(msgs) < 2:
-                logger.info(f"AFU Skip Conv {conv.id}: Less than 2 messages.")
-                continue
-            
-            last_msg = msgs[-1]
-            last_ai_msg = next((m for m in reversed(msgs) if m.role == 'assistant'), None)
-            
-            # Task 2: last message from user
-            if last_msg.role != 'user':
-                logger.info(f"AFU Skip Conv {conv.id}: Last message not from user.")
-                continue
-                
-            if last_msg.timestamp >= cutoff_time:
-                continue
-
-            # Task 2: last AI message was NOT already a question
-            if last_ai_msg:
-                ai_text = last_ai_msg.content.strip()
-                if ai_text.endswith("؟") or ai_text.endswith("?") or "هل تحتاج مساعدة" in ai_text or "Can I help" in ai_text:
-                    logger.info(f"AFU Skip Conv {conv.id}: Last AI message was already a question.")
-                    continue
-
-            # Task 3: Follow-Up Filtering (Short user message)
-            user_text_lower = last_msg.content.strip().lower()
-            short_dismissals = ["ok", "thanks", "شكرا", "تمام", "يعطيك العافية", "طيب", "حسنا", "لا شكرا", "no thanks"]
-            if len(user_text_lower) < 3 or any(user_text_lower == word for word in short_dismissals):
-                logger.info(f"AFU Skip Conv {conv.id}: Last message was short/dismissal ('{user_text_lower}')")
-                continue
-                
-            # Task 3: Follow-Up Filtering (Order completed)
-            if last_ai_msg and getattr(conv, 'category', '') == 'checkout':
-                logger.info(f"AFU Skip Conv {conv.id}: Conversation is in checkout/completed state.")
-                continue
-            checkout_indicators = ["[CHECKOUT:", "تم تثبيت الطلب بنجاح"]
-            if any(ind in h.content for h in msgs[-5:]):
-                logger.info(f"AFU Skip Conv {conv.id}: Conversation indicates order completion/checkout recently.")
-                continue
-
-            # Task 3: Improve follow-up message contextual quality
-            context = [{"role": h.role, "content": h.content} for h in msgs[-5:]]
-            sys_prompt = f"أنت مندوب مبيعات المتجر '{store.name}'. العميل تواصل معك مؤخراً وبدا مهتماً ثم توقف عن الرد. رسالتك السابقة له كانت: '{last_ai_msg.content if last_ai_msg else ''}'. \nالمطلوب: أرسل رسالة متابعة طبيعية، ودودة، وقصيرة جداً، تستند إلى آخر موضوع تحدثتم فيه بشكل ذكي. تجنب تكرار الكلام السابق، وتجنب الأسئلة النمطية العائمة مثل 'هل تحتاج مساعدة؟'. لا تستخدم أي مقدمات."
-            
-            ai_ctx = {'system_prompt': sys_prompt, 'history': context, 'store_id': getattr(store, 'id', None), 'is_downgraded': False}
-            reply = ai_engine.generate_response(message="[SYSTEM TRIGGER]: العميل غير نشط، يرجى إرسال رسالة متابعة ذكية.", context=ai_ctx)
-
-            # Task 5: Log follow_up_sent explicitly
-            logger.info(f"PERFORMANCE: follow_up_sent for Conv {conv.id}")
-            logger.info(f"AFU Triggered Conv {conv.id}: Sent follow-up -> {reply}")
-
-            msg_ai = MerchantService.add_message(conversation_id=conv.id, role="assistant", content=reply)
-            
-            
-            ctx["auto_followed_up_at"] = datetime.datetime.utcnow().isoformat()
-            ctx["follow_up_sent"] = True
-            MerchantService.update_conversation_context(conv.id, json.dumps(ctx))
-            
-            if conv.channel == "telegram" and getattr(store, "telegram_token", None) and getattr(conv.user, "telegram_id", None):
-                send_telegram_msg(store.telegram_token, conv.user.telegram_id, reply)
-                
-            follow_ups_sent += 1
-
-        return jsonify({"status": "success", "follow_ups_sent": follow_ups_sent})
-        
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
+    from src.chat.tasks import process_auto_followup
+    process_auto_followup.delay(store_id)
+    return jsonify({"status": "success", "message": "Background task triggered", "follow_ups_sent": "Scheduled"})
 
 
 
