@@ -4,6 +4,9 @@ import json
 from pydantic import ValidationError
 from src.admin.schemas import StoreCreate, SystemSettingUpdate
 
+import logging
+logger = logging.getLogger(__name__)
+
 from flask import Blueprint, jsonify, render_template, request, redirect, flash, session
 from werkzeug.security import generate_password_hash
 
@@ -169,7 +172,7 @@ def admin_store_detail(store_id):
                 "voice": bool(request.form.get("feat_voice")),
                 "advanced_ai": bool(request.form.get("feat_advanced_ai"))
             }
-            update_data["features_json"] = json.dumps(features)
+            update_data["features"] = json.dumps(features)
             
         AdminService.update_store(store_id, update_data)
         # re-fetch store name if we updated it locally
@@ -178,9 +181,9 @@ def admin_store_detail(store_id):
         return redirect(f"/admin/store/{store_id}")
         
     features_dict = {}
-    if getattr(store, 'features_json', None):
+    if getattr(store, 'features', None):
         try:
-            features_dict = json.loads(store.features_json)
+            features_dict = json.loads(store.features)
         except Exception as e:
             import logging
             logger = logging.getLogger(__name__)

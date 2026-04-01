@@ -350,10 +350,10 @@ class MerchantService:
             db.close()
 
     @staticmethod
-    def get_store_by_domain(domain: str):
+    def get_store_by_email(email: str):
         db = SessionLocal()
         try:
-            return db.query(Store).filter_by(domain=domain).first()
+            return db.query(Store).filter_by(owner_email=email).first()
         finally:
             db.close()
 

@@ -101,14 +101,15 @@ def merchant_broadcast_endpoint(store_id):
 
     if store_id != session.get("store_id"): return "Forbidden", 403
     msg = request.json.get("message") if request.is_json else request.form.get("message")
-    from src.chat.tasks import send_telegram_message
+    import requests
+    from src.chat.service import send_telegram_msg
     
     store = MerchantService.get_store(store_id)
     if store and store.telegram_token and msg:
         users = MerchantService.get_users(store_id)
         for u in users:
             if getattr(u, "telegram_id", None):
-                send_telegram_message.delay(store.telegram_token, u.telegram_id, msg)
+                send_telegram_msg(store.telegram_token, u.telegram_id, msg)
     return jsonify({"status": "success"}), 200
 
 @merchant_bp.route("/merchant/<int:store_id>/order/<int:order_id>/approve", methods=["POST"])
@@ -245,7 +246,7 @@ def preview_ai():
         store = MerchantService.get_store(session["store_id"])
         openai.api_key = settings.OPENAI_API_KEY
         response = openai.chat.completions.create(
-            model=store.ai_model or "gpt-3.5-turbo",
+            model=store.ai_mode or "gpt-3.5-turbo",
             messages=[
                 {"role": "system", "content": store.policy or "You are a helpful assistant."},
                 {"role": "user", "content": prompt}
