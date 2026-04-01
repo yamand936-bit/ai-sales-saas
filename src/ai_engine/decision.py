@@ -61,8 +61,17 @@ class DecisionEngine:
             
             import time
             from datetime import datetime
+            from sqlalchemy import func
+            
             if store.subscription_end_date and datetime.utcnow() > store.subscription_end_date:
                 return None
+            
+            # Token Limit Enforcement
+            limit = store.monthly_token_limit if store.monthly_token_limit else 100000
+            current_month = datetime.utcnow().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+            tokens_used = db.query(func.sum(AILog.total_tokens)).filter(AILog.store_id == store.id, AILog.created_at >= current_month).scalar() or 0
+            if tokens_used >= limit:
+                return "⚠️ You reached your plan limit. Please upgrade."
                 
             user = db.query(User).filter(User.store_id == store.id, User.telegram_id == str(user_id)).first()
             if not user:

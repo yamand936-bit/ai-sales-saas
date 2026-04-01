@@ -33,6 +33,15 @@ class EncryptedString(TypeDecorator):
                 return value
         return value
 
+class Plan(Base):
+    __tablename__ = "plans"
+
+    id = Column(Integer, primary_key=True)
+    name = Column(String, nullable=False)
+    price_usd = Column(Float, default=0)
+    monthly_token_limit = Column(Integer, default=100000)
+    features = Column(Text, nullable=True)
+
 class Store(Base):
     __tablename__ = "stores"
 
@@ -61,7 +70,10 @@ class Store(Base):
     last_payment_date = Column(DateTime, nullable=True)
     next_billing_date = Column(DateTime, nullable=True)
     payment_status = Column(String, default="paid") # paid, pending, overdue
-    monthly_token_limit = Column(Integer, default=500000)
+    monthly_token_limit = Column(Integer, default=100000)
+    
+    plan_id = Column(Integer, ForeignKey("plans.id"), nullable=True)
+    subscription_status = Column(String, default="active")
     
     # Legacy Fields (To be migrated/removed if needed but kept for safety)
     subscription_fee = Column(Float, default=0.0)
@@ -88,6 +100,7 @@ class Store(Base):
     # Relationships
     users = relationship("User", back_populates="store", foreign_keys="[User.store_id]", cascade="all, delete-orphan")
     products = relationship("Product", back_populates="store", cascade="all, delete-orphan")
+    plan = relationship("Plan")
 
 class AdminLog(Base):
     __tablename__ = "admin_logs"

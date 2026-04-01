@@ -3,7 +3,7 @@ from sqlalchemy import func
 from sqlalchemy.exc import SQLAlchemyError
 from src.core.database import SessionLocal
 from src.core.models import SystemSetting
-from src.stores.models import Store
+from src.stores.models import Store, Plan
 from src.users.models import User
 from src.orders.models import Order
 from src.chat.models import Conversation, Message, AILog
@@ -65,6 +65,16 @@ class AdminService:
     def create_store(data: dict):
         db = SessionLocal()
         try:
+            free_plan = db.query(Plan).filter(Plan.name == "Free").first()
+            if not free_plan:
+                free_plan = Plan(name="Free", price_usd=0.0, monthly_token_limit=100000, features='{"advanced": false}')
+                db.add(free_plan)
+                db.commit()
+                db.refresh(free_plan)
+
+            data["plan_id"] = free_plan.id
+            data["monthly_token_limit"] = free_plan.monthly_token_limit
+            
             new_store = Store(**data)
             db.add(new_store)
             db.commit()
@@ -174,5 +184,33 @@ class AdminService:
         try:
             convs = db.query(Conversation).order_by(Conversation.created_at.desc()).limit(10).all()
             return [{"id": c.id, "user_id": c.user_id, "requires_human": c.requires_human} for c in convs]
+        finally:
+            db.close()
+
+    @staticmethod
+    def update_store_plan(store_id: int, plan_id: int):
+        db = SessionLocal()
+        try:
+            store = db.query(Store).filter_by(id=store_id).first()
+            plan = db.query(Plan).filter_by(id=plan_id).first()
+            if store and plan:
+                store.plan_id = plan.id
+                store.monthly_token_limit = plan.monthly_token_limit
+                db.commit()
+                return True
+            return False
+        finally:
+            db.close()
+
+    @staticmethod
+    def update_subscription_status(store_id: int, status: str):
+        db = SessionLocal()
+        try:
+            store = db.query(Store).filter_by(id=store_id).first()
+            if store:
+                store.subscription_status = status
+                db.commit()
+                return True
+            return False
         finally:
             db.close()

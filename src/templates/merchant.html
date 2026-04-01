@@ -186,13 +186,24 @@
                         <div class="text-3xl font-black text-green-500">{{ conversion_rate }}%</div>
                         <div class="text-[10px] text-slate-400 mt-1">Percentage of users who completed a purchase.</div>
                     </div>
-                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex flex-col gap-2 relative overflow-hidden group">
-                        <span class="text-slate-500 text-sm font-bold z-10">{{ _('total_tokens_used') }}</span>
+                    <div class="bg-gradient-to-br from-indigo-50 to-white p-6 rounded-2xl shadow-sm border border-indigo-100 flex flex-col gap-2 relative overflow-hidden group">
+                        <div class="flex justify-between items-start z-10">
+                            <span class="text-indigo-600 text-sm font-black uppercase tracking-wider">Current Plan: {{ store.plan.name if store.plan else 'Free' }}</span>
+                            <span class="bg-indigo-600 text-white text-[10px] px-2 py-1 rounded-full font-bold shadow-sm">${{ store.plan.price_usd if store.plan else '0' }}/mo</span>
+                        </div>
                         {% set limit = store.monthly_token_limit if store.monthly_token_limit else 100000 %}
                         {% set usage_perc = ((total_tokens / limit) * 100) | round %}
-                        <div class="text-3xl font-black text-purple-600 z-10">{{ usage_perc }}%</div>
-                        <div class="text-[10px] text-slate-400 mt-1 z-10">of your monthly plan used</div>
-                        <div class="absolute -right-4 -bottom-4 opacity-10 text-6xl group-hover:scale-110 transition-transform">🪙</div>
+                        <div class="flex items-end gap-2 mt-2 z-10">
+                            <div class="text-3xl font-black text-slate-800">{{ usage_perc }}%</div>
+                            <div class="text-xs text-slate-500 font-bold mb-1">usage</div>
+                        </div>
+                        
+                        <div class="w-full bg-indigo-100 rounded-full h-2 mt-2 z-10">
+                            <div class="bg-indigo-600 h-2 rounded-full transition-all duration-1000" style="width: {{ usage_perc if usage_perc <= 100 else 100 }}%"></div>
+                        </div>
+                        <div class="text-[10px] text-slate-400 mt-1 z-10 text-right">{{ total_tokens }} / {{ limit }} tokens</div>
+                        
+                        <div class="absolute -right-4 -bottom-4 opacity-5 text-6xl group-hover:scale-110 transition-transform">💎</div>
                     </div>
                 </div>
 
