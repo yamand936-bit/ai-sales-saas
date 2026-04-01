@@ -42,7 +42,8 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 logger.info("Initializing Database schema...")
-Base.metadata.create_all(bind=engine)
+# DISABLED IN PRODUCTION (USE ALEMBIC ONLY)
+# Base.metadata.create_all(bind=engine)
 
 try:
     from src.core.feature_service import FeatureService
