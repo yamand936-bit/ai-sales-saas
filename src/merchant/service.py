@@ -197,10 +197,19 @@ class MerchantService:
             guidance_insights = []
             if FeatureService.is_enabled("smart_guidance"):
                 guidance_insights = GuidanceEngine.get_insights(store, total_tokens, len(human_requests))
+                
+            # --- PHASE 5 STEP 4: Onboarding Flow System ---
+            from src.merchant.onboarding import OnboardingEngine
+            onboarding_active = FeatureService.is_enabled("onboarding_flow")
+            current_onboarding_step = OnboardingEngine.get_current_step(store) if onboarding_active else 4
+            onboarding_steps = OnboardingEngine.get_steps() if onboarding_active else []
     
             return {
                 "store": store,
                 "guidance_insights": guidance_insights,
+                "onboarding_active": onboarding_active,
+                "onboarding_step": current_onboarding_step,
+                "onboarding_steps": onboarding_steps,
                 "lang": store.language or "ar",
                 "is_expired": is_expired,
                 "token_warning": token_warning,

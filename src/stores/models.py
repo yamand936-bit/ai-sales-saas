@@ -74,6 +74,7 @@ class Store(Base):
     
     plan_id = Column(Integer, ForeignKey("plans.id"), nullable=True)
     subscription_status = Column(String, default="active")
+    onboarding_step = Column(Integer, default=0)
     
     # Legacy Fields (To be migrated/removed if needed but kept for safety)
     subscription_fee = Column(Float, default=0.0)

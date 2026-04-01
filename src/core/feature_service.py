@@ -63,7 +63,8 @@ class FeatureService:
             ("auto_followup", "Automated cron-based background customer retention"),
             ("broadcast", "Mass message broadcasting to all customers"),
             ("analytics_dashboard", "Advanced charts and data on merchant panel"),
-            ("smart_guidance", "Dynamic contextual alerts and AI tasks for merchants")
+            ("smart_guidance", "Dynamic contextual alerts and AI tasks for merchants"),
+            ("onboarding_flow", "Interactive wizard to guide new merchants during activation")
         ]
         db = SessionLocal()
         try:
