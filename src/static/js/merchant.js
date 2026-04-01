@@ -12,12 +12,15 @@
                     .then(data => {
                         if (data.status === 'success') {
                             const btn = document.getElementById("systemAiToggleBtn");
+                            const feedback = document.getElementById("aiFeedbackMsg");
                             if (data.ai_enabled) {
-                                btn.className = "text-[10px] font-bold px-3 py-1.5 rounded border bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100 transition whitespace-nowrap";
-                                btn.innerText = "🤖 Disable AI";
+                                btn.className = "text-[10px] font-bold px-4 py-2 rounded shadow-sm border bg-green-100 text-green-700 border-green-200 hover:bg-green-200 transition whitespace-nowrap";
+                                btn.innerText = "🟢 AI ON";
+                                if (feedback) { feedback.innerText = "AI is now enabled"; feedback.classList.remove("hidden"); setTimeout(() => feedback.classList.add("hidden"), 3000); }
                             } else {
-                                btn.className = "text-[10px] font-bold px-3 py-1.5 rounded border bg-slate-50 text-slate-500 border-slate-200 hover:bg-slate-100 transition whitespace-nowrap";
-                                btn.innerText = "❌ Enable AI";
+                                btn.className = "text-[10px] font-bold px-4 py-2 rounded shadow-sm border bg-red-100 text-red-700 border-red-200 hover:bg-red-200 transition whitespace-nowrap";
+                                btn.innerText = "🔴 AI OFF";
+                                if (feedback) { feedback.innerText = "AI is now disabled"; feedback.classList.remove("hidden"); setTimeout(() => feedback.classList.add("hidden"), 3000); }
                             }
                             console.log("TOGGLE AI:", data.ai_enabled);
                         }

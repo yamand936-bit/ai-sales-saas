@@ -88,10 +88,13 @@
                 {% endif %}
             </div>
             
-            <div class="flex items-center gap-2">
-                <button id="systemAiToggleBtn" data-action="toggleAI" data-store-id="{{ store.id }}" class="text-[10px] font-bold px-3 py-1.5 rounded border {% if store.ai_enabled %}bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100{% else %}bg-slate-50 text-slate-500 border-slate-200 hover:bg-slate-100{% endif %} transition whitespace-nowrap">
-                    {% if store.ai_enabled %}🤖 Disable AI{% else %}❌ Enable AI{% endif %}
+            <div class="flex flex-col items-center">
+                <span class="text-[10px] text-gray-500 font-bold mb-1">AI Assistant Status</span>
+                <button id="systemAiToggleBtn" data-action="toggleAI" data-store-id="{{ store.id }}" class="text-[10px] font-bold px-4 py-2 rounded shadow-sm border {% if store.ai_enabled %}bg-green-100 text-green-700 border-green-200 hover:bg-green-200{% else %}bg-red-100 text-red-700 border-red-200 hover:bg-red-200{% endif %} transition whitespace-nowrap">
+                    {% if store.ai_enabled %}🟢 AI ON{% else %}🔴 AI OFF{% endif %}
                 </button>
+                <span id="aiFeedbackMsg" class="text-[9px] text-green-600 mt-1 hidden text-center">Status Updated</span>
+            </div>
                 <script>
                 
                 function triggerDevFollowUp() {
@@ -122,6 +125,24 @@
                 <a href="/set_lang/tr" class="text-xs font-bold px-3 py-1.5 rounded-lg border {% if lang == 'tr' %}bg-primary text-white border-primary{% else %}bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-200{% endif %} transition">TR</a>
             </div>
         </header>
+
+        {% set limit = store.monthly_token_limit if store.monthly_token_limit else 100000 %}
+        {% set usage_perc = (total_tokens / limit) * 100 %}
+        {% set human_req_count = human_requests | length %}
+        
+        {% if not store.ai_enabled %}
+        <div class="bg-red-50 text-red-700 border-b border-red-200 p-3 text-center text-sm font-bold flex items-center justify-center gap-2 shadow-sm shrink-0">
+            <span>⚠️ Your AI is OFF — turn it ON</span>
+        </div>
+        {% elif usage_perc > 80 %}
+        <div class="bg-orange-50 text-orange-700 border-b border-orange-200 p-3 text-center text-sm font-bold flex items-center justify-center gap-2 shadow-sm shrink-0">
+            <span>⚠️ You reached {{ usage_perc | round }}% of your plan</span>
+        </div>
+        {% elif human_req_count > 0 %}
+        <div class="bg-yellow-50 text-yellow-700 border-b border-yellow-200 p-3 text-center text-sm font-bold flex items-center justify-center gap-2 shadow-sm shrink-0">
+            <span>🔔 You have pending customers</span>
+        </div>
+        {% endif %}
 
         {% if token_warning %}
         <div class="bg-gradient-to-r from-red-600 to-red-500 text-white p-3 text-center text-sm font-bold shadow-lg z-50 shrink-0 border-b border-red-700">
@@ -170,8 +191,10 @@
                     </div>
                     <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex flex-col gap-2 relative overflow-hidden group">
                         <span class="text-slate-500 text-sm font-bold z-10">{{ _('total_tokens_used') }}</span>
-                        <div class="text-3xl font-black text-purple-600 z-10">{{ total_tokens }}</div>
-                        <div class="text-[10px] text-slate-400 mt-1 z-10">Total AI processing consumed by your store.</div>
+                        {% set limit = store.monthly_token_limit if store.monthly_token_limit else 100000 %}
+                        {% set usage_perc = ((total_tokens / limit) * 100) | round %}
+                        <div class="text-3xl font-black text-purple-600 z-10">{{ usage_perc }}%</div>
+                        <div class="text-[10px] text-slate-400 mt-1 z-10">of your monthly plan used</div>
                         <div class="absolute -right-4 -bottom-4 opacity-10 text-6xl group-hover:scale-110 transition-transform">🪙</div>
                     </div>
                 </div>

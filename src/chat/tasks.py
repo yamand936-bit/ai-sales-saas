@@ -58,7 +58,7 @@ def check_store_limits(platform: str, token: str):
 
 @celery.task(name="process_telegram_task", bind=True, max_retries=3)
 def process_telegram_webhook(self, token: str, update: dict):
-    print("TASK START")
+    logger.info("TASK START")
     try:
         _log_event("telegram", token, "Message Received")
         allowed, reason = check_store_limits("telegram", token)
@@ -106,7 +106,7 @@ def process_telegram_webhook(self, token: str, update: dict):
             except Exception:
                 pass
     finally:
-        print("TASK END")
+        logger.info("TASK END")
 
 @celery.task(name="process_whatsapp_task", bind=True, max_retries=3)
 def process_whatsapp_webhook(self, token: str, update: dict):

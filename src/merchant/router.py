@@ -287,17 +287,10 @@ def logout():
 @merchant_bp.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
-        store_id = request.form.get("store_id", "").strip()
-        email = request.form.get("email") # Fallback
+        email = request.form.get("email", "").strip()
         password = request.form.get("password")
         
-        store = None
-        if store_id.isdigit():
-            store = MerchantService.get_store(int(store_id))
-        elif store_id:
-            store = MerchantService.get_store_by_email(store_id)
-        elif email:
-             store = MerchantService.get_store_by_email(email)
+        store = MerchantService.get_store_by_email(email)
              
         if store and check_password_hash(store.password_hash, password):
             session.permanent = True

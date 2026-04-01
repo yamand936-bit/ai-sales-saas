@@ -13,10 +13,10 @@ from src.ai_engine.service import ai_engine
 logger = logging.getLogger(__name__)
 
 def send_telegram_msg(token, chat_id, text):
-    print("DEBUG: Sending message to Telegram", chat_id, text)
-    print("CHAT ID:", chat_id)
+    logger.info(f"DEBUG: Sending message to Telegram {chat_id} {text}")
+    logger.info(f"CHAT ID: {chat_id}")
     response = requests.post(f"https://api.telegram.org/bot{token}/sendMessage", json={"chat_id": str(chat_id), "text": text})
-    print("TELEGRAM RESPONSE:", response.status_code, response.text)
+    logger.info(f"TELEGRAM RESPONSE: {response.status_code} {response.text}")
 
 class ChatProcessingService:
     def handle_telegram_update(self, token: str, update: dict):
@@ -290,7 +290,7 @@ class ChatProcessingService:
                 conversation.category = 'complaint'
                 db.commit()
                 # Notify admin via console log simulation
-                if store.owner_email: print(f"ALERT: Complaint email sent to {store.owner_email}!")
+                if store.owner_email: logger.info(f"ALERT: Complaint email sent to {store.owner_email}!")
             
             if '[CATEGORY: HUMAN]' in clean_reply:
                 clean_reply = clean_reply.replace('[CATEGORY: HUMAN]', '').strip()

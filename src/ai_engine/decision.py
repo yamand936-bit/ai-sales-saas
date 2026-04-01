@@ -191,7 +191,7 @@ class DecisionEngine:
 
             # Business Logic Execution Layer (The true decoupling)
             final_reply_text = self._execute_action(db, safe_output, store, user, conversation)
-            print("AI RESPONSE:", final_reply_text)
+            logger.info(f"AI RESPONSE: {final_reply_text}")
             
             # Document AI Msg
             ai_msg = Message(conversation_id=conversation.id, role="assistant", content=final_reply_text)
