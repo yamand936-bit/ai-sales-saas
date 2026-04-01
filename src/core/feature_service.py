@@ -62,7 +62,8 @@ class FeatureService:
             ("ai_system", "Core AI processing for incoming customer messages"),
             ("auto_followup", "Automated cron-based background customer retention"),
             ("broadcast", "Mass message broadcasting to all customers"),
-            ("analytics_dashboard", "Advanced charts and data on merchant panel")
+            ("analytics_dashboard", "Advanced charts and data on merchant panel"),
+            ("smart_guidance", "Dynamic contextual alerts and AI tasks for merchants")
         ]
         db = SessionLocal()
         try:

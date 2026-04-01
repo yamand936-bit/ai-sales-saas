@@ -125,24 +125,6 @@
 
         {% set limit = store.monthly_token_limit if store.monthly_token_limit else 100000 %}
         {% set usage_perc = (total_tokens / limit) * 100 %}
-        {% set human_req_count = human_requests | length %}
-        
-        {% if not store.ai_enabled %}
-        <div class="bg-red-50 text-red-700 border-b border-red-200 p-3 text-center text-sm font-bold flex items-center justify-center gap-2 shadow-sm shrink-0">
-            <span>⚠️ Your AI is OFF — turn it ON</span>
-        </div>
-        {% elif usage_perc > 80 %}
-        <div class="bg-orange-50 text-orange-700 border-b border-orange-200 p-3 text-center text-sm font-bold flex items-center justify-center gap-2 shadow-sm shrink-0">
-            <span>⚠️ You reached {{ usage_perc | round }}% of your plan</span>
-        </div>
-        {% elif human_req_count > 0 %}
-        <div class="bg-yellow-50 text-yellow-700 border-b border-yellow-200 p-3 text-center text-sm font-bold flex items-center justify-center gap-2 shadow-sm shrink-0">
-            <span>🔔 You have pending customers</span>
-        </div>
-        {% endif %}
-
-        {% if token_warning %}
-        <div class="bg-gradient-to-r from-red-600 to-red-500 text-white p-3 text-center text-sm font-bold shadow-lg z-50 shrink-0 border-b border-red-700">
             ⚠️ تحذير: استهلك المتجر أكثر من 80% من حصة الذكاء الاصطناعي الشهرية (الحد: {{ monthly_token_limit }}). يرجى ترقية الباقة لضمان استمرار الخدمة.
         </div>
         {% endif %}

@@ -190,9 +190,17 @@ class MerchantService:
                 "reply_rate": reply_rate,
                 "conversion_after_rate": conversion_after_rate
             }
+            
+            # --- PHASE 5 STEP 3: Smart Guidance System ---
+            from src.core.feature_service import FeatureService
+            from src.merchant.guidance import GuidanceEngine
+            guidance_insights = []
+            if FeatureService.is_enabled("smart_guidance"):
+                guidance_insights = GuidanceEngine.get_insights(store, total_tokens, len(human_requests))
     
             return {
                 "store": store,
+                "guidance_insights": guidance_insights,
                 "lang": store.language or "ar",
                 "is_expired": is_expired,
                 "token_warning": token_warning,
