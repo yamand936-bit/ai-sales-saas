@@ -43,6 +43,10 @@ class DecisionEngine:
         self.ai_service = AIEngineService()
     
     def process_message(self, platform: str, token: str, user_id: str, first_name: str, text: str, image_base64: str = None, msg_id: str = None) -> str:
+        from src.core.feature_service import FeatureService
+        if not FeatureService.is_enabled("ai_system"):
+            return "⚠️ System is under maintenance. AI is temporarily disabled."
+        
         if not Guardrails.validate_input(text):
             return "عذراً، لا يمكنني معالجة هذا الطلب. هل يمكنني مساعدتك في الشراء؟"
             

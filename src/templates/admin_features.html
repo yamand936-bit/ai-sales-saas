@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Feature Flags - Admin Panel</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .toggle-checkbox:checked { right: 0; border-color: #4F46E5; }
+        .toggle-checkbox:checked + .toggle-label { background-color: #4F46E5; }
+        .toggle-checkbox { right: 0; z-index: 1; border-color: #e2e8f0; transition: all 0.3s; }
+        .toggle-label { background-color: #e2e8f0; transition: all 0.3s; }
+    </style>
+</head>
+<body class="bg-slate-100 min-h-screen p-8">
+    <div class="max-w-4xl mx-auto">
+        <header class="flex justify-between items-center mb-8">
+            <h1 class="text-3xl font-black text-slate-800">Feature Flags</h1>
+            <a href="/admin/dashboard" class="text-indigo-600 hover:text-indigo-800 font-bold underline">Back to Dashboard</a>
+        </header>
+
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+            <table class="w-full text-left border-collapse">
+                <thead>
+                    <tr class="bg-slate-50 border-b border-slate-200">
+                        <th class="p-4 text-slate-500 font-bold uppercase text-sm tracking-wider">Feature Key</th>
+                        <th class="p-4 text-slate-500 font-bold uppercase text-sm tracking-wider">Description</th>
+                        <th class="p-4 text-slate-500 font-bold uppercase text-sm tracking-wider text-right">Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for feature in features %}
+                    <tr class="border-b border-slate-100 hover:bg-slate-50 transition">
+                        <td class="p-4 font-mono text-sm text-slate-800 font-bold">{{ feature.key }}</td>
+                        <td class="p-4 text-slate-500 text-sm">{{ feature.description }}</td>
+                        <td class="p-4 text-right">
+                            <div class="relative inline-block w-12 mr-2 align-middle select-none transition duration-200 ease-in">
+                                <input type="checkbox" id="toggle-{{ feature.key }}" onchange="toggleFeature('{{ feature.key }}')" class="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 appearance-none cursor-pointer" {% if feature.enabled %}checked{% endif %}/>
+                                <label for="toggle-{{ feature.key }}" class="toggle-label block overflow-hidden h-6 rounded-full bg-gray-300 cursor-pointer"></label>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        async function toggleFeature(key) {
+            try {
+                const response = await fetch(`/admin/features/toggle/${key}`, { method: 'POST' });
+                const result = await response.json();
+                if (result.status === 'success') {
+                    // Flash quick message
+                    console.log(`Feature ${key} toggled to ${result.enabled}`);
+                } else {
+                    alert('Error toggling feature: ' + result.message);
+                }
+            } catch (error) {
+                console.error('Error toggling feature:', error);
+                alert("Failed to toggle feature flag.");
+            }
+        }
+    </script>
+</body>
+</html>

@@ -95,6 +95,10 @@ def update_settings(store_id):
 @merchant_bp.route("/merchant/<int:store_id>/broadcast", methods=["POST"])
 @merchant_required
 def merchant_broadcast_endpoint(store_id):
+    from src.core.feature_service import FeatureService
+    if not FeatureService.is_enabled("broadcast"):
+        return jsonify({"status": "error", "message": "Broadcast feature is currently disabled."}), 403
+
     if store_id != session.get("store_id"): return "Forbidden", 403
     msg = request.json.get("message") if request.is_json else request.form.get("message")
     from src.chat.tasks import send_telegram_message

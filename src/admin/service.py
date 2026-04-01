@@ -214,3 +214,17 @@ class AdminService:
             return False
         finally:
             db.close()
+
+    @staticmethod
+    def get_all_features():
+        from src.core.models import FeatureFlag
+        db = SessionLocal()
+        try:
+            return db.query(FeatureFlag).all()
+        finally:
+            db.close()
+
+    @staticmethod
+    def toggle_feature(key: str):
+        from src.core.feature_service import FeatureService
+        return FeatureService.toggle_feature(key)

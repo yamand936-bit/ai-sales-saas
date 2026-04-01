@@ -306,3 +306,15 @@ def admin_ai_health():
         })
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
+
+@admin_bp.route('/features', methods=['GET'])
+@admin_required
+def features_dashboard():
+    features = AdminService.get_all_features()
+    return render_template('admin_features.html', features=features)
+
+@admin_bp.route('/features/toggle/<key>', methods=['POST'])
+@admin_required
+def toggle_feature(key):
+    new_status = AdminService.toggle_feature(key)
+    return jsonify({"status": "success", "enabled": new_status})

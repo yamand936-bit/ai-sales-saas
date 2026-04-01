@@ -229,6 +229,11 @@ def process_instagram_webhook(self, token: str, update: dict):
 
 @celery.task(name="process_auto_followup")
 def process_auto_followup(store_id: int):
+    from src.core.feature_service import FeatureService
+    if not FeatureService.is_enabled("auto_followup"):
+        logger.info(f"Auto-followup is disabled by feature flag. Skipping store {store_id}.")
+        return
+
     try:
         from src.chat.service import send_telegram_msg
         from src.ai_engine.service import ai_engine

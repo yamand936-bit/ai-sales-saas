@@ -44,6 +44,12 @@ logger = logging.getLogger(__name__)
 logger.info("Initializing Database schema...")
 Base.metadata.create_all(bind=engine)
 
+try:
+    from src.core.feature_service import FeatureService
+    FeatureService.initialize_defaults()
+except Exception as e:
+    logger.warning(f"Could not initialize default feature flags: {e}")
+
 app = Flask(__name__, template_folder='templates')
 
 app.config.update(
