@@ -9,6 +9,8 @@ from src.orders.models import Order
 from src.chat.models import Conversation, Message, AILog
 from src.users.models import User
 
+logger = logging.getLogger(__name__)
+
 class MerchantService:
     @staticmethod
     def get_dashboard(store_id: int):
@@ -134,8 +136,6 @@ class MerchantService:
     
             # AI Smart Insights Logic
             ai_insights = []
-            import logging
-            logger = logging.getLogger(__name__)
     
             # Task 4: Insights Improvement
             if total_conversations > 10:
