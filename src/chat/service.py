@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 def send_telegram_msg(token, chat_id, text):
     logger.info(f"DEBUG: Sending message to Telegram {chat_id} {text}")
     logger.info(f"CHAT ID: {chat_id}")
-    response = requests.post(f"https://api.telegram.org/bot{token}/sendMessage", json={"chat_id": str(chat_id), "text": text})
+    response = requests.post(f"https://api.telegram.org/bot{token}/sendMessage", json={"chat_id": str(chat_id, timeout=5), "text": text})
     logger.info(f"TELEGRAM RESPONSE: {response.status_code} {response.text}")
 
 class ChatProcessingService:
@@ -32,10 +32,10 @@ class ChatProcessingService:
             try:
                 photo = message["photo"][-1]
                 file_id = photo["file_id"]
-                file_info_res = requests.get(f"https://api.telegram.org/bot{token}/getFile?file_id={file_id}").json()
+                file_info_res = requests.get(f"https://api.telegram.org/bot{token}/getFile?file_id={file_id}", timeout=5).json()
                 if file_info_res.get("ok"):
                     file_path = file_info_res["result"]["file_path"]
-                    img_data = requests.get(f"https://api.telegram.org/file/bot{token}/{file_path}").content
+                    img_data = requests.get(f"https://api.telegram.org/file/bot{token}/{file_path}", timeout=5).content
                     image_base64 = base64.b64encode(img_data).decode("utf-8")
                 text = message.get("caption", text)
             except Exception as e:
@@ -44,10 +44,10 @@ class ChatProcessingService:
         voice_id = message.get("voice", {}).get("file_id") or message.get("audio", {}).get("file_id")
         if voice_id:
             try:
-                file_info_res = requests.get(f"https://api.telegram.org/bot{token}/getFile?file_id={voice_id}").json()
+                file_info_res = requests.get(f"https://api.telegram.org/bot{token}/getFile?file_id={voice_id}", timeout=5).json()
                 if file_info_res.get("ok"):
                     file_path = file_info_res["result"]["file_path"]
-                    audio_data = requests.get(f"https://api.telegram.org/file/bot{token}/{file_path}").content
+                    audio_data = requests.get(f"https://api.telegram.org/file/bot{token}/{file_path}", timeout=5).content
                     transcribed_text = ai_engine.transcribe_audio(audio_data, filename="voice.ogg")
                     if text:
                         text = f"{text}\n[رسالة صوتية مفرغة]: {transcribed_text}".strip()
@@ -61,10 +61,7 @@ class ChatProcessingService:
         db = SessionLocal()
         try:
             store = None
-            for s in db.query(Store).filter(Store.status == 'active').all():
-                if getattr(s, 'telegram_token', None) == token:
-                    store = s
-                    break
+            store = db.query(Store).filter(Store.status == 'active', Store.telegram_token == token).first()
             if not store: return
             if not store.is_active: return # Ignore messages if store disabled
             
@@ -343,7 +340,7 @@ class ChatProcessingService:
             if img_match:
                 photo_url = img_match.group(1).strip()
                 clean_reply = re.sub(r'\[IMAGE:\s*https?://[^\]]+\]', '', clean_reply).strip()
-                res = requests.post(f"https://api.telegram.org/bot{token}/sendPhoto", json={"chat_id": user_id, "photo": photo_url, "caption": clean_reply})
+                res = requests.post(f"https://api.telegram.org/bot{token}/sendPhoto", json={"chat_id": user_id, "photo": photo_url, "caption": clean_reply}, timeout=5)
                 if not res.json().get("ok"): send_telegram_msg(token, user_id, clean_reply)
             else:
                 send_telegram_msg(token, user_id, clean_reply)
@@ -370,10 +367,7 @@ class ChatProcessingService:
             
             db = SessionLocal()
             store = None
-            for s in db.query(Store).filter(Store.status == 'active').all():
-                if getattr(s, 'whatsapp_token', None) == token:
-                    store = s
-                    break
+            store = db.query(Store).filter(Store.status == 'active', Store.whatsapp_token == token).first()
             if not store or not store.is_active: return
             from datetime import datetime
             if store.subscription_end_date and datetime.utcnow() > store.subscription_end_date: return
@@ -527,7 +521,7 @@ class ChatProcessingService:
                     "type": "text",
                     "text": {"body": reply}
                 }
-                res = requests.post(url, headers=headers, json=payload)
+                res = requests.post(url, headers=headers, json=payload, timeout=5)
                 if not res.ok:
                     logger.error(f"WhatsApp send failed: {res.text}")
             else:
@@ -560,10 +554,7 @@ class ChatProcessingService:
                 
             db = SessionLocal()
             store = None
-            for s in db.query(Store).filter(Store.status == 'active').all():
-                if getattr(s, 'instagram_token', None) == token:
-                    store = s
-                    break
+            store = db.query(Store).filter(Store.status == 'active', Store.instagram_token == token).first()
             if not store or not store.is_active: return
             from datetime import datetime
             if store.subscription_end_date and datetime.utcnow() > store.subscription_end_date: return
@@ -716,7 +707,7 @@ class ChatProcessingService:
                 "recipient": {"id": sender_id},
                 "message": {"text": reply}
             }
-            res = requests.post(url, headers=headers, json=payload)
+            res = requests.post(url, headers=headers, json=payload, timeout=5)
             if not res.ok:
                 logger.error(f"Instagram send failed: {res.text}")
 

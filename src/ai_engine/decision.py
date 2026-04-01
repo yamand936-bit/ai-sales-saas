@@ -54,10 +54,12 @@ class DecisionEngine:
         try:
             # Platform-agnostic unified auth
             store = None
-            for s in db.query(Store).filter(Store.status == 'active').all():
-                if platform == "telegram" and getattr(s, 'telegram_token', None) == token: store = s; break
-                elif platform == "whatsapp" and getattr(s, 'whatsapp_token', None) == token: store = s; break
-                elif platform == "instagram" and getattr(s, 'instagram_token', None) == token: store = s; break
+            if platform == "telegram":
+                store = db.query(Store).filter(Store.status == 'active', Store.telegram_token == token).first()
+            elif platform == "whatsapp":
+                store = db.query(Store).filter(Store.status == 'active', Store.whatsapp_token == token).first()
+            elif platform == "instagram":
+                store = db.query(Store).filter(Store.status == 'active', Store.instagram_token == token).first()
                 
             if not store: return None
                 
