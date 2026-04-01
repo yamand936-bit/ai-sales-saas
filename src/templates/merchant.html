@@ -117,9 +117,6 @@
                     });
                 }
                 </script>
-                <div class="h-6 border-r border-slate-200 mx-1"></div>
-                <button onclick="triggerDevFollowUp()" class="text-[9px] text-slate-300 hover:text-slate-500 font-mono px-2 transition" title="Dev Only: Trigger Auto Followup">⚙️ AFU</button>
-                <div class="h-6 border-r border-slate-200 mx-1"></div>
                 <a href="/set_lang/ar" class="text-xs font-bold px-3 py-1.5 rounded-lg border {% if lang == 'ar' %}bg-primary text-white border-primary{% else %}bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-200{% endif %} transition">عربي</a>
                 <a href="/set_lang/en" class="text-xs font-bold px-3 py-1.5 rounded-lg border {% if lang == 'en' %}bg-primary text-white border-primary{% else %}bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-200{% endif %} transition">EN</a>
                 <a href="/set_lang/tr" class="text-xs font-bold px-3 py-1.5 rounded-lg border {% if lang == 'tr' %}bg-primary text-white border-primary{% else %}bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-200{% endif %} transition">TR</a>
@@ -657,7 +654,7 @@
                 <div class="max-w-2xl bg-white rounded-2xl shadow-sm border border-slate-200 p-8">
                     <h2 class="text-2xl font-black text-slate-800 mb-2">{{ _('create_ad_campaign') }}</h2>
                     <p class="text-slate-500 text-sm mb-6">{{ _('broadcast_warning_start') }} {{ users|length }} {{ _('customers_end') }}</p>
-                    <form action="/merchant/{{ store.id }}/broadcast" method="POST">
+                    <form action="/merchant/{{ store.id }}/broadcast" method="POST" onsubmit="return confirm('Are you sure you want to send this message to all users?');">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <textarea name="message" rows="5" class="w-full text-right bg-slate-50 border border-slate-200 rounded-xl p-4 mb-4 focus:ring-2 focus:ring-primary focus:outline-none text-sm" placeholder="{{ _('write_promo_offer') }}" required></textarea>
                         <button type="submit" class="w-full bg-primary hover:bg-indigo-700 text-white font-black py-4 rounded-xl transition shadow-md">{{ _('send_campaign_now') }}</button>
