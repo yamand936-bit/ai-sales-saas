@@ -113,7 +113,7 @@ class ChatProcessingService:
                     user.active_order_id = None
                     db.commit()
                     
-                    history = db.query(Message).filter(Message.conversation_id == conversation.id).order_by(Message.timestamp).all()
+                    history = db.query(Message).filter(Message.conversation_id == conversation.id).order_by(Message.timestamp.desc()).limit(15).all(); history.reverse()
                     context = [{"role": h.role, "content": h.content} for h in history[-5:]]
                     confirm_prompt = ai_engine.generate_response(
                         system_prompt=f"العميل أرسل عنوان التوصيل الخاص به: '{text}'. مهمتك: أجب بلطافة وأخبره أنه تم تثبيت الطلب بنجاح وأنه سيشحن في أقرب وقت. لا تطلب معلومات إضافية واختتم المحادثة.",
@@ -142,7 +142,7 @@ class ChatProcessingService:
             
             db.commit()
             
-            history = db.query(Message).filter(Message.conversation_id == conversation.id).order_by(Message.timestamp).all()
+            history = db.query(Message).filter(Message.conversation_id == conversation.id).order_by(Message.timestamp.desc()).limit(15).all(); history.reverse()
             context = [{"role": h.role, "content": h.content} for h in history[:-1][-10:]]
             
             products = db.query(Product).filter_by(store_id=store.id, is_active=True).all()
@@ -402,7 +402,7 @@ class ChatProcessingService:
             
             db.commit()
             
-            history = db.query(Message).filter(Message.conversation_id == conversation.id).order_by(Message.id.asc()).all()
+            history = db.query(Message).filter(Message.conversation_id == conversation.id).order_by(Message.timestamp.desc()).limit(15).all(); history.reverse()
             context = [{"role": h.role, "content": h.content} for h in history[:-1][-10:]]
             
             full_system_prompt = f"أنت مندوب مبيعات لمتجر '{store.name}' يتواصل عبر WhatsApp. العميل مسجل بالاسم '{user.first_name}'.\n"
@@ -591,7 +591,7 @@ class ChatProcessingService:
             
             db.commit()
             
-            history = db.query(Message).filter(Message.conversation_id == conversation.id).order_by(Message.id.asc()).all()
+            history = db.query(Message).filter(Message.conversation_id == conversation.id).order_by(Message.timestamp.desc()).limit(15).all(); history.reverse()
             context = [{"role": h.role, "content": h.content} for h in history[:-1][-10:]]
             
             full_system_prompt = f"أنت مندوب مبيعات لمتجر '{store.name}' يتواصل عبر Instagram. العميل مسجل بالاسم '{user.first_name}'.\n"

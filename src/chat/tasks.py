@@ -258,7 +258,7 @@ def process_auto_followup(store_id: int):
         follow_ups_sent = 0
 
         try:
-            feats = json.loads(store.features) if getattr(store, "features", None) else {}
+            feats = json.loads(store.features_json) if getattr(store, "features", None) else {}
             delay_mins = int(feats.get("followup_delay", 60))
         except Exception:
             delay_mins = 60
@@ -299,7 +299,8 @@ def process_single_followup(conv_id: int, store_id: int, cutoff_iso: str):
     from src.core.database import SessionLocal
     from src.chat.models import Conversation
     db = SessionLocal()
-    conv = db.query(Conversation).filter_by(id=conv_id).first()
+    from sqlalchemy.orm import joinedload
+    conv = db.query(Conversation).options(joinedload(Conversation.user)).filter_by(id=conv_id).first()
     db.close()
     if not conv: return
 
@@ -371,3 +372,9 @@ def process_single_followup(conv_id: int, store_id: int, cutoff_iso: str):
     return {"status": "success", "follow_ups_sent": follow_ups_sent}
     
     
+
+
+@celery.task(name="send_telegram_message_task")
+def send_telegram_message(token: str, chat_id: str, text: str):
+    from src.chat.service import send_telegram_msg
+    return send_telegram_msg(token, str(chat_id), text)
